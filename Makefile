@@ -1,4 +1,4 @@
-TARGET := system
+TARGET := kernel
 
 MKDIR := ../make
 BINDIR := ../binaries

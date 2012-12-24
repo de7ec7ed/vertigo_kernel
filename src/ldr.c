@@ -46,7 +46,7 @@ result_t ldr_und_handler(vec_handler_t *handler, size_t *handled, gen_general_pu
 	size_t size;
 	size_t i;
 
-	VARIABLE_NOT_USED(handler);
+	UNUSED_VARIABLE(handler);
 
 	DBG_LOG_FUNCTION(ldr_dbg, DBG_LEVEL_3);
 
@@ -513,7 +513,7 @@ result_t ldr_parse_module_import_functions(ldr_module_t *module, gen_import_func
 	size_t i;
 	ldr_function_t *function;
 
-	VARIABLE_NOT_USED(module);
+	UNUSED_VARIABLE(module);
 
 	DBG_LOG_FUNCTION(ldr_dbg, DBG_LEVEL_3);
 

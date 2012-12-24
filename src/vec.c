@@ -271,9 +271,9 @@ result_t vec_default_handler(vec_handler_t *handler, size_t *handled, gen_genera
 
 	DBG_LOG_FUNCTION(vec_dbg, DBG_LEVEL_3);
 
-	VARIABLE_NOT_USED(handler);
-	VARIABLE_NOT_USED(registers);
-	VARIABLE_NOT_USED(handled);
+	UNUSED_VARIABLE(handler);
+	UNUSED_VARIABLE(registers);
+	UNUSED_VARIABLE(handled);
 
 	// its fast but not that fast. printing in multiple exceptions at the same time
 	// will cause the system to become unresponsive. it has not been tested with all
