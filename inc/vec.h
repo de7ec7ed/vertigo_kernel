@@ -6,7 +6,7 @@
 #include <armv7lib/gen.h>
 #include <armv7lib/exc.h>
 
-#include <system/mmu.h>
+#include <kernel/mmu.h>
 
 #define VEC_RESET_VECTOR                 EXC_RESET_INDEX
 #define VEC_UNDEFINED_INSTRUCTION_VECTOR EXC_UNDEFINED_INSTRUCTION_INDEX

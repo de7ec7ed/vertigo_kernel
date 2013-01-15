@@ -5,7 +5,7 @@
 
 #include <dbglib/ser.h>
 
-#include <system/mmu.h>
+#include <kernel/mmu.h>
 
 #ifdef __C__
 

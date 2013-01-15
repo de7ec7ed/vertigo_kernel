@@ -8,7 +8,7 @@
 
 #include <hdrlib/gen.h>
 
-#include <system/vec.h>
+#include <kernel/vec.h>
 
 #define LDR_ADD_MODULE           0 ///< Add a module to the system. Input: r2 holds a pointer the buffer, r3 is the size, r4 holds argc, r5 holds argv. Output: r0 holds the result.
 #define LDR_REMOVE_MODULE        1 ///< Remove a module from the system, Input: r2 holds a pointer to the string, r3 holds argc, r4 holds argv. Output: r0 holds the result.
