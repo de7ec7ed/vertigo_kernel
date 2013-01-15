@@ -19,7 +19,7 @@
 #include <fxplib/gen.h>
 
 #include <hdrlib/gen.h>
-#include <hdrlib/sys.h>
+#include <hdrlib/krn.h>
 
 #include <stdlib/check.h>
 #include <stdlib/string.h>
@@ -28,8 +28,8 @@ DBG_DEFINE_VARIABLE(start_dbg, DBG_LEVEL_3);
 
 result_t start_c() {
 
-	sys_header_t *hdr = NULL;
-	sys_import_header_t *imp_hdr = NULL;
+	krn_header_t *hdr = NULL;
+	krn_import_header_t *imp_hdr = NULL;
 	void * mas_address = NULL;
 	size_t mas_size;
 	void *org_sp = NULL;
@@ -40,7 +40,7 @@ result_t start_c() {
 	//-------------------------//
 
 	// verify the system was loaded into memory correctly
-	CHECK_SUCCESS(start_verify_system(), "[-] unable to verify the system", FAILURE, start_dbg, DBG_LEVEL_2)
+	CHECK_SUCCESS(start_verify_kernel(), "[-] unable to verify the kernel", FAILURE, start_dbg, DBG_LEVEL_2)
 		return FAILURE;
 	CHECK_END
 
@@ -59,27 +59,27 @@ result_t start_c() {
 	DBG_LOG_STATEMENT("[%] serial port virtual address", ser_get_virtual_address(), start_dbg, DBG_LEVEL_2);
 	DBG_LOG_STATEMENT("[%] serial port size", ser_get_size(), start_dbg, DBG_LEVEL_2);
 
-	// print out the system header and other environment information
+	// print out the kernel header and other environment information
 	start_print_environment_information();
 
 	// print out the cpu information
 	start_print_cpu_information();
 
-	// start initialization of the memory management subsystems
+	// start initialization of the memory management subsystem
 	mas_address = (void *)((size_t)&end_callsign + sizeof(end_callsign) + gen_get_base());
 	mas_address = (void *)(((u32_t)mas_address & ~ONE_KILOBYTE_MASK) + ONE_KILOBYTE);
 
 	mas_size = (imp_hdr->virtual_address + imp_hdr->size) - (u32_t)mas_address;
 
-	DBG_LOG_STATEMENT("[%] memory allocation system start address", mas_address, start_dbg, DBG_LEVEL_2);
-	DBG_LOG_STATEMENT("[%] memory allocation system end address", (mas_address + mas_size), start_dbg, DBG_LEVEL_2);
-	DBG_LOG_STATEMENT("[%] memory allocation system size", mas_size, start_dbg, DBG_LEVEL_2);
+	DBG_LOG_STATEMENT("[%] memory allocation subsystem start address", mas_address, start_dbg, DBG_LEVEL_2);
+	DBG_LOG_STATEMENT("[%] memory allocation subsystem end address", (mas_address + mas_size), start_dbg, DBG_LEVEL_2);
+	DBG_LOG_STATEMENT("[%] memory allocation subsystem size", mas_size, start_dbg, DBG_LEVEL_2);
 
-	CHECK_SUCCESS(mas_init(mas_address, mas_size), "[-] unable to initialize the memory allocation system", FAILURE, start_dbg, DBG_LEVEL_2)
+	CHECK_SUCCESS(mas_init(mas_address, mas_size), "[-] unable to initialize the memory allocation subsystem", FAILURE, start_dbg, DBG_LEVEL_2)
 		return FAILURE;
 	CHECK_END
 
-	DBG_LOG_STATEMENT("[+] initialized the memory allocation system", SUCCESS, start_dbg, DBG_LEVEL_2);
+	DBG_LOG_STATEMENT("[+] initialized the memory allocation subsystem", SUCCESS, start_dbg, DBG_LEVEL_2);
 
 	CHECK_SUCCESS(mmu_lookup_init((tt_virtual_address_t)imp_hdr->virtual_address, imp_hdr->size), "unable to initialize the memory management unit lookup table", FAILURE, start_dbg, DBG_LEVEL_2)
 		return FAILURE;
@@ -142,7 +142,7 @@ result_t start_c() {
 	DBG_LOG_STATEMENT("[+] switch back to the old stack", SUCCESS, start_dbg, DBG_LEVEL_2);
 
 	// verify the system was loaded into memory correctly
-	CHECK_SUCCESS(start_verify_system(), "[-] unable to verify the system", FAILURE, start_dbg, DBG_LEVEL_2)
+	CHECK_SUCCESS(start_verify_kernel(), "[-] unable to verify the system", FAILURE, start_dbg, DBG_LEVEL_2)
 		return FAILURE;
 	CHECK_END
 
@@ -165,8 +165,8 @@ result_t start_c() {
 result_t start_run(void) {
 
 	mmu_paging_system_t ps;
-	sys_header_t *hdr;
-	sys_export_header_t *exp_hdr;
+	krn_header_t *hdr;
+	krn_export_header_t *exp_hdr;
 	ldr_module_t *module;
 	tt_virtual_address_t va;
 	tt_physical_address_t pa;
@@ -174,7 +174,7 @@ result_t start_run(void) {
 	DBG_LOG_FUNCTION(start_dbg, DBG_LEVEL_3);
 
 	hdr = gen_get_base();
-	exp_hdr = (sys_export_header_t *)(((size_t)hdr) + ((size_t)hdr->export));
+	exp_hdr = (krn_export_header_t *)(((size_t)hdr) + ((size_t)hdr->export));
 
 	//------------------------//
 	//  START DEBUG BRING UP  //
@@ -212,13 +212,13 @@ result_t start_run(void) {
 		return FAILURE;
 	CHECK_END
 
-	CHECK_SUCCESS(vec_patch(&ps), "unable to patch the vector system", FAILURE, start_dbg, DBG_LEVEL_2)
+	CHECK_SUCCESS(vec_patch(&ps), "unable to patch the vector subsystem", FAILURE, start_dbg, DBG_LEVEL_2)
 		return FAILURE;
 	CHECK_END
 
-	DBG_LOG_STATEMENT("[+] initialized the vector system", SUCCESS, start_dbg, DBG_LEVEL_2);
+	DBG_LOG_STATEMENT("[+] initialized the vector subsystem", SUCCESS, start_dbg, DBG_LEVEL_2);
 
-	CHECK_SUCCESS(ldr_init(), "unable to initialize the loader system", FAILURE, start_dbg, DBG_LEVEL_2)
+	CHECK_SUCCESS(ldr_init(), "unable to initialize the loader subsystem", FAILURE, start_dbg, DBG_LEVEL_2)
 		return FAILURE;
 	CHECK_END
 
@@ -226,11 +226,11 @@ result_t start_run(void) {
 	memset(module, 0, sizeof(ldr_module_t));
 	module->pointer = gen_get_base();
 
-	CHECK_SUCCESS(ldr_parse_module_export_functions(module, gen_add_base(exp_hdr->functions), exp_hdr->functions_size), "unable to parse system export functions", gen_add_base(exp_hdr->functions), start_dbg, DBG_LEVEL_2)
+	CHECK_SUCCESS(ldr_parse_module_export_functions(module, gen_add_base(exp_hdr->functions), exp_hdr->functions_size), "unable to parse subsystem export functions", gen_add_base(exp_hdr->functions), start_dbg, DBG_LEVEL_2)
 		return FAILURE;
 	CHECK_END
 
-	DBG_LOG_STATEMENT("[+] initialized the loader system", SUCCESS, start_dbg, DBG_LEVEL_2);
+	DBG_LOG_STATEMENT("[+] initialized the loader subsystem", SUCCESS, start_dbg, DBG_LEVEL_2);
 
 	return SUCCESS;
 }
@@ -351,8 +351,8 @@ void start_print_cpu_information(void) {
 
 void start_print_environment_information(void) {
 
-	sys_header_t *hdr;
-	sys_import_header_t *imp_hdr;
+	krn_header_t *hdr;
+	krn_import_header_t *imp_hdr;
 
     hdr = gen_get_base();
     imp_hdr = gen_add_base(hdr->import);
@@ -367,7 +367,7 @@ void start_print_environment_information(void) {
     return;
 }
 
-result_t start_verify_system(void) {
+result_t start_verify_kernel(void) {
 
         u32_t *sc, *ec;
         sc = ((size_t)&start_callsign + gen_get_base());

@@ -19,7 +19,7 @@ result_t start_finish(void);
 void start_print_cpu_information(void);
 void start_print_environment_information(void);
 
-result_t start_verify_system(void);
+result_t start_verify_kernel(void);
 
 result_t start_stack_init(void *cur_sp);
 result_t start_stack_fini(void *cur_sp, void *org_sp);

@@ -1,5 +1,5 @@
 #include <defines.h>
 
-.section .end
+SECTION(end)
 
 VARIABLE(end_callsign) .word CALLSIGN

@@ -4,7 +4,7 @@
 #include <start.h>
 #include <armv7lib/int.h>
 
-.section .start
+SECTION(start)
 
 // this jump allows for the binary loader to just jump to the
 // beginning of the buffer. This must be the first thing in the binary
