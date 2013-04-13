@@ -22,12 +22,14 @@
 #include <config.h>
 #include <defines.h>
 #include <types.h>
-#include <start.h>
-#include <end.h>
-#include <mas.h>
-#include <mmu.h>
-#include <vec.h>
-#include <ldr.h>
+#include <kernel/call.h>
+#include <kernel/start.h>
+#include <kernel/end.h>
+#include <kernel/mas.h>
+#include <kernel/mmu.h>
+#include <kernel/vec.h>
+#include <kernel/ldr.h>
+#include <kernel/log.h>
 
 #include <armv7lib/gen.h>
 #include <armv7lib/int.h>
@@ -68,11 +70,19 @@ result_t start_c() {
 	hdr = gen_get_base();
 	imp_hdr = gen_add_base(hdr->import);
 
-	// start initialization of the serial port
-
-	CHECK_SUCCESS(ser_init(ser_get_virtual_address()), "[-] unable to initialize the serial port", FAILURE, start_dbg, DBG_LEVEL_2)
+	#ifdef __MEMORY_DEBUG__
+	CHECK_SUCCESS(mem_init(), "failed to initialize the memory log", FAILURE, start_dbg, DBG_LEVEL_2)
 		return FAILURE;
 	CHECK_END
+	#endif //__MEMORY_DEBUG__
+
+	#ifdef __SERIAL_DEBUG__
+	CHECK_SUCCESS(ser_init(ser_get_virtual_address()), "failed to initialize the serial port", FAILURE, start_dbg, DBG_LEVEL_2)
+		return FAILURE;
+	CHECK_END
+	#endif //__SERIAL_DEBUG__
+
+	printf("serial port physical address : %p, virtual address : %p, size : %x\n", ser_get_physical_address(), ser_get_virtual_address(), ser_get_size());
 
 	DBG_LOG_STATEMENT("[%] serial port initialized", SUCCESS, start_dbg, DBG_LEVEL_2);
 
@@ -238,6 +248,22 @@ result_t start_run(void) {
 	CHECK_END
 
 	DBG_LOG_STATEMENT("[+] initialized the vector subsystem", SUCCESS, start_dbg, DBG_LEVEL_2);
+
+	CHECK_SUCCESS(call_init(), "unable to initialize the call subsystem", FAILURE, start_dbg, DBG_LEVEL_2)
+		return FAILURE;
+	CHECK_END
+
+	CHECK_SUCCESS(vec_add_handler(VEC_UNDEFINED_INSTRUCTION_VECTOR, gen_add_base(&call_dispatch), NULL), "unable to register the vec call handler", FAILURE, start_dbg, DBG_LEVEL_2)
+		return FAILURE;
+	CHECK_END
+
+	DBG_LOG_STATEMENT("[+] initialized the call subsystem", SUCCESS, start_dbg, DBG_LEVEL_2);
+
+	CHECK_SUCCESS(log_init(), "unable to initialize the log subsystem", FAILURE, start_dbg, DBG_LEVEL_2)
+		return FAILURE;
+	CHECK_END
+
+	DBG_LOG_STATEMENT("[+] initialized the log subsystem", SUCCESS, start_dbg, DBG_LEVEL_2);
 
 	CHECK_SUCCESS(ldr_init(), "unable to initialize the loader subsystem", FAILURE, start_dbg, DBG_LEVEL_2)
 		return FAILURE;

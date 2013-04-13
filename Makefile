@@ -15,9 +15,12 @@ HDRFILES += $(INCDIR)/vec.h
 HDRFILES += $(INCDIR)/ldr.h
 
 SRCFILES := start.S start.c
+SRCFILES += call.c
 SRCFILES += mas.c mmu.c
 SRCFILES += vec.S vec.c
+SRCFILES += log.c
 SRCFILES += ldr.S ldr.c
+SRCFILES += lst.c
 SRCFILES += end.S
 
 include $(MKDIR)/Makefile_arm_fb.common
@@ -77,12 +80,12 @@ $(OBJDIR)/%.c.o: $(SRCDIR)/%.c $(DEPS)
 	@$(CC) $(CFLAGS) -c -D__C__ -o $@ $<
 
 $(TARGET): $(OBJS)
-	@echo "building $(TARGET)"
+	echo "building $(TARGET)"
 	@$(LD) $(LFLAGS) -o $(BINDIR)/$(TARGET).elf $(OBJS) $(OBJECTS)
 	@$(OBJCOPY) $(OBJCOPYFLAGS) $(BINDIR)/$(TARGET).elf $(BINDIR)/$(TARGET).bin
 
 objdump:
-	$(OBJDUMP) -D $(BINDIR)/$(TARGET).elf
+	@$(OBJDUMP) -D $(BINDIR)/$(TARGET).elf
 
 xxd:
-	xxd $(BINDIR)/$(TARGET).bin
+	@xxd $(BINDIR)/$(TARGET).bin
