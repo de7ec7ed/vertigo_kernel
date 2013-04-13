@@ -31,6 +31,8 @@
 
 #include <kernel/vec.h>
 
+#define LDR_CALL_IDENTIFIER      0x11111111
+
 #define LDR_ADD_MODULE           0 ///< Add a module to the system. Input: r2 holds a pointer the buffer, r3 is the size, r4 holds argc, r5 holds argv. Output: r0 holds the result.
 #define LDR_REMOVE_MODULE        1 ///< Remove a module from the system, Input: r2 holds a pointer to the string, r3 holds argc, r4 holds argv. Output: r0 holds the result.
 #define LDR_COPY_MODULE_HEADER   2 ///< Copy a module header of the system, Input: r2 holds an index into the module list, r3 holds a pointer to an allocated memory, r4 holds the size of allocated memory. Output: r0 holds the result.
@@ -60,7 +62,7 @@ extern result_t ldr_call_remove_module(u8_t *string);
 
 extern result_t ldr_init(void);
 
-extern result_t ldr_und_handler(vec_handler_t *handler, size_t *handled, gen_general_purpose_registers_t *registers);
+extern result_t ldr_call_handler(call_handler_t *handler, void *data, gen_general_purpose_registers_t *registers);
 
 extern result_t ldr_add_function(ldr_module_t *module, gen_export_function_t *export);
 

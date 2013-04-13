@@ -494,7 +494,7 @@ result_t vec_get_debug_level(size_t *level) {
 
 	DBG_LOG_FUNCTION(vec_dbg, DBG_LEVEL_3);
 
-	*level = DBG_GET_VARIABLE(vec_dbg);
+	DBG_GET_VARIABLE(vec_dbg, *level);
 
 	return SUCCESS;
 }

@@ -35,12 +35,13 @@
 #include <stdlib/check.h>
 #include <stdlib/string.h>
 
-#include <mas.h>
-#include <mmu.h>
-#include <ldr.h>
-#include <vec.h>
+#include <kernel/call.h>
+#include <kernel/mas.h>
+#include <kernel/mmu.h>
+#include <kernel/ldr.h>
 
-DBG_DEFINE_VARIABLE(ldr_dbg, DBG_LEVEL_2);
+
+DBG_DEFINE_VARIABLE(ldr_dbg, DBG_LEVEL_3);
 
 ldr_module_t *ldr_modules = NULL;
 ldr_function_t *ldr_functions = NULL;
@@ -49,14 +50,14 @@ result_t ldr_init(void) {
 
 	DBG_LOG_FUNCTION(ldr_dbg, DBG_LEVEL_3);
 
-	CHECK_SUCCESS(vec_add_handler(VEC_UNDEFINED_INSTRUCTION_VECTOR, gen_add_base(ldr_und_handler), NULL), "unable to add vector handler", FAILURE, ldr_dbg, DBG_LEVEL_2)
+	CHECK_SUCCESS(call_register_handler(LDR_CALL_IDENTIFIER, gen_add_base(&ldr_call_handler), NULL), "unable to register the call handler", FAILURE, ldr_dbg, DBG_LEVEL_2)
 		return FAILURE;
 	CHECK_END
 
 	return SUCCESS;
 }
 
-result_t ldr_und_handler(vec_handler_t *handler, size_t *handled, gen_general_purpose_registers_t *registers) {
+result_t ldr_call_handler(call_handler_t *handler, void *data, gen_general_purpose_registers_t *registers) {
 
 	ldr_module_t **head;
 	ldr_module_t *module;
@@ -71,24 +72,18 @@ result_t ldr_und_handler(vec_handler_t *handler, size_t *handled, gen_general_pu
 
 	DBG_LOG_FUNCTION(ldr_dbg, DBG_LEVEL_3);
 
-	if(registers->r0 != CALLSIGN) {
-		return SUCCESS;
-	}
-
 	// TODO: modify the domain registers to allow cross domain reads
 	// from the system. This is just to make sure nothing bad happens
 	// here. Neither Android nor iOS use domains for separation
 
-	if(registers->r1 == LDR_ADD_MODULE) {
+	if(registers->r2 == LDR_ADD_MODULE) {
 
-		*handled = TRUE;
-
-		CHECK_NOT_NULL(registers->r2, "registers->r2 is null", registers->r2, ldr_dbg, DBG_LEVEL_2)
+		CHECK_NOT_NULL(registers->r3, "registers->r3 is null", registers->r3, ldr_dbg, DBG_LEVEL_2)
 			registers->r0 = FAILURE;
 			return SUCCESS;
 		CHECK_END
 
-		size = registers->r3;
+		size = registers->r4;
 
 		buffer = malloc(size);
 
@@ -97,9 +92,9 @@ result_t ldr_und_handler(vec_handler_t *handler, size_t *handled, gen_general_pu
 			return SUCCESS;
 		CHECK_END
 
-		memcpy(buffer, (void *)(registers->r2), size);
+		memcpy(buffer, (void *)(registers->r3), size);
 
-		argc = registers->r4;
+		argc = registers->r5;
 
 		CHECK(argc != 0, "argc equals 0", argc, ldr_dbg, DBG_LEVEL_2)
 			registers->r0 = FAILURE;
@@ -114,9 +109,9 @@ result_t ldr_und_handler(vec_handler_t *handler, size_t *handled, gen_general_pu
 		CHECK_END
 
 		for(i = 0; i < argc; i++) {
-			argv[i] = malloc(strlen((char *)(((u8_t **)registers->r5)[i])) + 1);
-			memset(argv[i], 0, strlen((char *)(((u8_t **)registers->r5)[i])) + 1);
-			memcpy(argv[i], ((u8_t **)(registers->r5))[i], strlen((char *)(((u8_t **)registers->r5)[i])));
+			argv[i] = malloc(strlen((char *)(((u8_t **)registers->r6)[i])) + 1);
+			memset(argv[i], 0, strlen((char *)(((u8_t **)registers->r6)[i])) + 1);
+			memcpy(argv[i], ((u8_t **)(registers->r6))[i], strlen((char *)(((u8_t **)registers->r6)[i])));
 			DBG_LOG_STATEMENT(gen_subtract_base(argv[i]), 0, ldr_dbg, DBG_LEVEL_3);
 		}
 
@@ -152,16 +147,14 @@ result_t ldr_und_handler(vec_handler_t *handler, size_t *handled, gen_general_pu
 
 		registers->r0 = SUCCESS;
 	}
-	else if(registers->r1 == LDR_REMOVE_MODULE) {
+	else if(registers->r2 == LDR_REMOVE_MODULE) {
 
-		*handled = TRUE;
-
-		CHECK_SUCCESS(ldr_lookup_module((u8_t *)(registers->r2), &module), "failed to lookup the module", FAILURE, ldr_dbg, DBG_LEVEL_2)
+		CHECK_SUCCESS(ldr_lookup_module((u8_t *)(registers->r3), &module), "failed to lookup the module", FAILURE, ldr_dbg, DBG_LEVEL_2)
 			registers->r0 = FAILURE;
 			return SUCCESS;
 		CHECK_END
 
-		argc = registers->r3;
+		argc = registers->r4;
 
 		CHECK(argc != 0, "argc equals 0", argc, ldr_dbg, DBG_LEVEL_2)
 			registers->r0 = FAILURE;
@@ -176,9 +169,9 @@ result_t ldr_und_handler(vec_handler_t *handler, size_t *handled, gen_general_pu
 		CHECK_END
 
 		for(i = 0; i < argc; i++) {
-			argv[i] = malloc(strlen((char *)(((u8_t **)registers->r4)[i])) + 1);
-			memset(argv[i], 0, strlen((char *)(((u8_t **)registers->r4)[i])) + 1);
-			memcpy(argv[i], ((u8_t **)(registers->r4))[i], strlen((char *)(((u8_t **)registers->r4)[i])));
+			argv[i] = malloc(strlen((char *)(((u8_t **)registers->r5)[i])) + 1);
+			memset(argv[i], 0, strlen((char *)(((u8_t **)registers->r5)[i])) + 1);
+			memcpy(argv[i], ((u8_t **)(registers->r5))[i], strlen((char *)(((u8_t **)registers->r5)[i])));
 			DBG_LOG_STATEMENT(gen_subtract_base(argv[i]), 0, ldr_dbg, DBG_LEVEL_3);
 		}
 
@@ -214,9 +207,7 @@ result_t ldr_und_handler(vec_handler_t *handler, size_t *handled, gen_general_pu
 
 		registers->r0 = SUCCESS;
 	}
-	else if(registers->r1 == LDR_COPY_MODULE_HEADER) {
-
-		*handled = TRUE;
+	else if(registers->r2 == LDR_COPY_MODULE_HEADER) {
 
 		head = gen_add_base(&ldr_modules);
 
@@ -225,7 +216,7 @@ result_t ldr_und_handler(vec_handler_t *handler, size_t *handled, gen_general_pu
 			return SUCCESS;
 		CHECK_END
 
-		CHECK_NOT_NULL(registers->r3, "registers->r3 is null", registers->r3, ldr_dbg, DBG_LEVEL_2)
+		CHECK_NOT_NULL(registers->r4, "registers->r4 is null", registers->r4, ldr_dbg, DBG_LEVEL_2)
 			registers->r0 = FAILURE;
 			return SUCCESS;
 		CHECK_END
@@ -235,29 +226,27 @@ result_t ldr_und_handler(vec_handler_t *handler, size_t *handled, gen_general_pu
 		registers->r0 = FAILURE;
 
 		while(module != NULL) {
-			if(registers->r2 == 0) {
+			if(registers->r3 == 0) {
 				hdr = (mod_header_t *)(module->pointer);
 
-				CHECK(registers->r4 >= (sizeof(mod_header_t) + strlen((char *)(hdr->string))), "not enough space", sizeof(mod_header_t) + strlen((char *)(hdr->string)), ldr_dbg, DBG_LEVEL_2)
+				CHECK(registers->r5 >= (sizeof(mod_header_t) + strlen((char *)(hdr->string))), "not enough space", sizeof(mod_header_t) + strlen((char *)(hdr->string)), ldr_dbg, DBG_LEVEL_2)
 					registers->r0 = FAILURE;
 					return SUCCESS;
 				CHECK_END
 
-				memcpy((void *)(registers->r3), hdr, sizeof(mod_header_t) + strlen((char *)(hdr->string)));
+				memcpy((void *)(registers->r4), hdr, sizeof(mod_header_t) + strlen((char *)(hdr->string)));
 				registers->r0 = SUCCESS;
 				break;
 			}
-			(registers->r2)--;
+			(registers->r3)--;
 			module = module->next;
 		}
 	}
 	else {
-		DBG_LOG_STATEMENT("register->r1 option is unknown", registers->r1, ldr_dbg, DBG_LEVEL_2);
-		*handled = FALSE;
-		return SUCCESS;
+		DBG_LOG_STATEMENT("register->r2 option is unknown", registers->r2, ldr_dbg, DBG_LEVEL_2);
+		return FAILURE;
 	}
 
-	*handled = TRUE;
 	return SUCCESS;
 }
 
@@ -637,7 +626,7 @@ result_t ldr_get_debug_level(size_t *level) {
 
 	DBG_LOG_FUNCTION(ldr_dbg, DBG_LEVEL_3);
 
-	*level = DBG_GET_VARIABLE(ldr_dbg);
+	DBG_GET_VARIABLE(ldr_dbg, *level);
 
 	return SUCCESS;
 }

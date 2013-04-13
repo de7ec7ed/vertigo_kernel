@@ -266,7 +266,7 @@ result_t mas_get_debug_level(size_t *level) {
 
 	DBG_LOG_FUNCTION(mas_dbg, DBG_LEVEL_3);
 
-	*level = DBG_GET_VARIABLE(mas_dbg);
+	DBG_GET_VARIABLE(mas_dbg, *level);
 
 	return SUCCESS;
 }

@@ -72,6 +72,7 @@ typedef union vec_arm_single_data_transfer_instruction vec_arm_single_data_trans
 
 typedef union vec_arm_branch_instruction vec_arm_branch_instruction_t;
 
+// FIXME: change handled to a bool_t
 typedef result_t (* vec_function_t)(vec_handler_t *handler, size_t *handled, gen_general_purpose_registers_t *registers);
 
 struct vec_handler {
@@ -102,7 +103,7 @@ union vec_arm_single_data_transfer_instruction {
 union vec_arm_branch_instruction {
 	struct {
 		u32_t offset :24; // Offset
-		u32_t l      :1;  // Lick Bit 0 = Branch 1 = Branch with Link
+		u32_t l      :1;  // Link Bit 0 = Branch 1 = Branch with Link
 		u32_t opcode :3;  // Opcode
 		u32_t cond   :4;  // Condition Field
 	} fields;

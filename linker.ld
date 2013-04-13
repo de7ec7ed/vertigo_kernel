@@ -4,43 +4,38 @@ ENTRY(default)
 SECTIONS
 {
 	. = 0x00000000;
-	. = ALIGN(4);
 	.text : {
 	    start = .;
-	    *start.S.o(.start)
+	    *start.S.o(.start*)
 	}
 	. = ALIGN(4);
 	.text : {
 		text = .;
-		*(.text);
+		*(.text*);
 	}
 	. = ALIGN(4);
 	.text : {
 		rodata = .;
-		*(.rodata);
+		*(.rodata*);
 	}
 	. = ALIGN(4);
 	.text :	{
 		data = .;
-		*(.data)
+		*(.data*)
 	}
 	. = ALIGN(4);
 	.text : {
 		bss = .;
-		*(.bss);
+		*(.bss*);
 	}
 	. = ALIGN(4);
 	.text : {
-		LC0 = .;
-		*(.LC0);
-	}
-	. = ALIGN(4);
-	.text : {
-		*end.S.o(.end)
+		*end.S.o(.end*)
 	}
 	/DISCARD/ : {
 		*(.ARM.attributes);
 		*(.comment);
+		*(.LC0);
 	}
 		
 }

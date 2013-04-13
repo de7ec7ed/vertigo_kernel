@@ -1422,7 +1422,7 @@ result_t mmu_get_debug_level(size_t *level) {
 
 	DBG_LOG_FUNCTION(mmu_dbg, DBG_LEVEL_3);
 
-	*level = DBG_GET_VARIABLE(mmu_dbg);
+	DBG_GET_VARIABLE(mmu_dbg, *level);
 
 	return SUCCESS;
 }
