@@ -28,6 +28,7 @@
 #include <armv7lib/exc.h>
 
 #include <kernel/mmu.h>
+#include <kernel/lst.h>
 
 #define VEC_RESET_VECTOR                 EXC_RESET_INDEX
 #define VEC_UNDEFINED_INSTRUCTION_VECTOR EXC_UNDEFINED_INSTRUCTION_INDEX
@@ -37,6 +38,8 @@
 #define VEC_NOT_USED_VECTOR              EXC_NOT_USED_INDEX
 #define VEC_INTERRUPT_VECTOR             EXC_INTERRUPT_INDEX
 #define VEC_FAST_INTERRUPT_VECTOR        EXC_FAST_INTERRUPT_INDEX
+
+#define VEC_DEFAULT_VECTOR 0xFFFF
 
 #define VEC_ARM_SINGLE_DATA_TRANSFER_OPCODE      0x04000000
 #define VEC_ARM_SINGLE_DATA_TRANSFER_OPCODE_MASK 0x0C000000
@@ -50,9 +53,9 @@
 
 #ifdef __C__
 
-#define VEC_C_HANDLER(name)	                            \
+#define VEC_C_HANDLER(name)	                           \
 	extern size_t *vec_handler_ ## name;               \
-	extern size_t vec_handled_ ## name;                \
+	extern bool_t vec_handled_ ## name;                \
 	extern size_t *vec_old_stack_ ## name;             \
 	extern size_t *vec_new_stack_ ## name;             \
 	extern void vec_asm_handler_ ## name(void);
@@ -73,14 +76,12 @@ typedef union vec_arm_single_data_transfer_instruction vec_arm_single_data_trans
 typedef union vec_arm_branch_instruction vec_arm_branch_instruction_t;
 
 // FIXME: change handled to a bool_t
-typedef result_t (* vec_function_t)(vec_handler_t *handler, size_t *handled, gen_general_purpose_registers_t *registers);
+typedef result_t (* vec_function_t)(vec_handler_t *handler, bool_t *handled, gen_general_purpose_registers_t *registers);
 
 struct vec_handler {
-	vec_handler_t *prev;
 	size_t vector;
 	vec_function_t function;
 	void *data;
-	vec_handler_t *next;
 };
 
 union vec_arm_single_data_transfer_instruction {
@@ -116,13 +117,13 @@ extern result_t vec_patch(mmu_paging_system_t *ps);
 
 extern size_t vec_instruction_to_address(size_t instruction, size_t instruction_address, size_t *absolute_address);
 
-extern result_t vec_default_handler(vec_handler_t *handler, size_t *handled, gen_general_purpose_registers_t *registers);
+extern result_t vec_default_handler(vec_handler_t *handler, bool_t *handled, gen_general_purpose_registers_t *registers);
 
-extern result_t vec_add_handler(size_t vector, vec_function_t function, void *data);
+extern result_t vec_register_handler(size_t vector, vec_function_t function, void *data);
 
-extern result_t vec_lookup_handler(size_t vector, vec_handler_t **handler);
+extern result_t vec_find_handler(lst_item_t **item, size_t vector);
 
-extern result_t vec_remove_handler(vec_handler_t *handler);
+extern result_t vec_unregister_handler(size_t vector, vec_function_t function);
 
 extern result_t vec_dispatch_handler(size_t vector, gen_general_purpose_registers_t *registers);
 
@@ -148,7 +149,7 @@ extern result_t vec_set_debug_level(size_t level);
 VARIABLE(vec_handler_\name) .word 0x0
 
 // boolean to determine if the event was handled or not
-VARIABLE(vec_handled_\name) .word 0x0
+VARIABLE(vec_handled_\name) .byte 0x0
 VARIABLE(vec_old_stack_\name) .word 0x0
 VARIABLE(vec_new_stack_\name) .word 0x0
 
@@ -166,7 +167,7 @@ FUNCTION(vec_asm_handler_\name)
 	push {r0 - r12}
 
 	// put the vector into r0
-	mov r0, #\vector
+	mov r0, $\vector
 
 	// put the address of sp in r1 as it will
 	// be used as the gen_general_purpose_registers_t *
@@ -176,8 +177,9 @@ FUNCTION(vec_asm_handler_\name)
 	bl vec_dispatch_handler
 
 	// see if the event was handled
-	ldr r0, vec_handled_\name
-	cmp r0, #FALSE
+	mov r0, $0
+	ldrb r0, vec_handled_\name
+	cmp r0, $FALSE
 	bne 1f
 
 	// it was not handled jump to the operating system handler

@@ -46,6 +46,14 @@ build:
 	@mkdir -p $(OBJDIR)
 	@$(MAKE) -s $(TARGET)
 
+version:
+	@echo "#ifndef __$(shell echo $(TARGET) | tr a-z A-Z)_VERSION_H__" > $(INCDIR)/version.h
+	@echo "#define __$(shell echo $(TARGET) | tr a-z A-Z)_VERSION_H__" >> $(INCDIR)/version.h
+	@echo "#define VERSION_RELEASE_NUMBER \"0.1\"" >> $(INCDIR)/version.h
+	@echo "#define VERSION_COMMIT_NUMBER \"`git log -1 --pretty=format:%H`\"" >> $(INCDIR)/version.h
+	@echo "#define VERSION_BUILD_DATE_TIME \"`date`\"" >> $(INCDIR)/version.h
+	@echo "#endif //__$(shell echo $(TARGET) | tr a-z A-Z)_VERSION_H__" >> $(INCDIR)/version.h
+
 includes:
 	@echo "including $(TARGET)"
 	@mkdir -p $(INCLUDESDIR)/$(TARGET)
@@ -66,6 +74,7 @@ clean:
 	@rm -rf $(INCLUDESDIR)/$(TARGET)
 	@rm -rf $(BINDIR)/$(TARGET).elf
 	@rm -rf $(BINDIR)/$(TARGET).bin
+	@rm -f $(INCDIR)/version.h
 	@rm -rf $(OBJDIR)
 	@rm -rf *~
 	@rm -rf $(INCDIR)/*~

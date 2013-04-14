@@ -30,6 +30,7 @@
 #include <kernel/vec.h>
 #include <kernel/ldr.h>
 #include <kernel/log.h>
+#include <kernel/version.h>
 
 #include <armv7lib/gen.h>
 #include <armv7lib/int.h>
@@ -47,7 +48,7 @@
 #include <stdlib/check.h>
 #include <stdlib/string.h>
 
-DBG_DEFINE_VARIABLE(start_dbg, DBG_LEVEL_3);
+DBG_DEFINE_VARIABLE(start_dbg, DBG_LEVEL_2);
 
 result_t start_c() {
 
@@ -59,7 +60,7 @@ result_t start_c() {
 	void *cur_sp = NULL;
 
 	//-------------------------//
-	//  START SYSTEM BRING UP  //
+	//      START BRING UP     //
 	//-------------------------//
 
 	// verify the system was loaded into memory correctly
@@ -76,19 +77,19 @@ result_t start_c() {
 	CHECK_END
 	#endif //__MEMORY_DEBUG__
 
+	DBG_LOG_STATEMENT("[+] memory log initialized", SUCCESS, start_dbg, DBG_LEVEL_2);
+
 	#ifdef __SERIAL_DEBUG__
 	CHECK_SUCCESS(ser_init(ser_get_virtual_address()), "failed to initialize the serial port", FAILURE, start_dbg, DBG_LEVEL_2)
 		return FAILURE;
 	CHECK_END
 	#endif //__SERIAL_DEBUG__
 
-	printf("serial port physical address : %p, virtual address : %p, size : %x\n", ser_get_physical_address(), ser_get_virtual_address(), ser_get_size());
-
-	DBG_LOG_STATEMENT("[%] serial port initialized", SUCCESS, start_dbg, DBG_LEVEL_2);
-
 	DBG_LOG_STATEMENT("[%] serial port physical address", ser_get_physical_address(), start_dbg, DBG_LEVEL_2);
 	DBG_LOG_STATEMENT("[%] serial port virtual address", ser_get_virtual_address(), start_dbg, DBG_LEVEL_2);
 	DBG_LOG_STATEMENT("[%] serial port size", ser_get_size(), start_dbg, DBG_LEVEL_2);
+
+	DBG_LOG_STATEMENT("[+] serial port initialized", SUCCESS, start_dbg, DBG_LEVEL_2);
 
 	// print out the kernel header and other environment information
 	start_print_environment_information();
@@ -145,13 +146,13 @@ result_t start_c() {
 	CHECK_END
 
 	//-----------------------//
-	//  END SYSTEM BRING UP  //
+	//      END BRING UP     //
 	//-----------------------//
 
 	start_run();
 
 	//--------------------------//
-	//  START SYSTEM TEAR DOWN  //
+	//     START TEAR DOWN      //
 	//--------------------------//
 
 	DBG_LOG_STATEMENT("[%] about to switch to the old paging system", SUCCESS, start_dbg, DBG_LEVEL_2);
@@ -179,15 +180,15 @@ result_t start_c() {
 
 
 	//------------------------//
-	//  END SYSTEM TEAR DOWN  //
+	//     END TEAR DOWN      //
 	//------------------------//
 
 	//--------------------------//
-	//  START SYSTEM TEST AREA  //
+	//    START TEST AREA       //
 	//--------------------------//
 
 	//------------------------//
-	//  END SYSTEM TEST AREA  //
+	//     END TEST AREA      //
 	//------------------------//
 
 	return SUCCESS;
@@ -253,7 +254,7 @@ result_t start_run(void) {
 		return FAILURE;
 	CHECK_END
 
-	CHECK_SUCCESS(vec_add_handler(VEC_UNDEFINED_INSTRUCTION_VECTOR, gen_add_base(&call_dispatch), NULL), "unable to register the vec call handler", FAILURE, start_dbg, DBG_LEVEL_2)
+	CHECK_SUCCESS(vec_register_handler(VEC_UNDEFINED_INSTRUCTION_VECTOR, gen_add_base(&call_dispatch), NULL), "unable to register the vec call handler", FAILURE, start_dbg, DBG_LEVEL_2)
 		return FAILURE;
 	CHECK_END
 
@@ -400,19 +401,51 @@ void start_print_environment_information(void) {
 
 	krn_header_t *hdr;
 	krn_import_header_t *imp_hdr;
+	krn_export_header_t *exp_hdr;
+	gen_export_function_t *functions;
+	size_t i;
 
-    hdr = gen_get_base();
-    imp_hdr = gen_add_base(hdr->import);
+	hdr = gen_get_base();
 
-    DBG_LOG_STATEMENT("[%] environment information", 0, start_dbg, DBG_LEVEL_3);
-    DBG_LOG_STATEMENT("[%] callsign", hdr->callsign, start_dbg, DBG_LEVEL_3);
-    DBG_LOG_STATEMENT("[%] operating_system", imp_hdr->operating_system, start_dbg, DBG_LEVEL_3);
-    DBG_LOG_STATEMENT("[%] virtual_address", imp_hdr->virtual_address, start_dbg, DBG_LEVEL_3);
-    DBG_LOG_STATEMENT("[%] physical_address", imp_hdr->physical_address, start_dbg, DBG_LEVEL_3);
-    DBG_LOG_STATEMENT("[%] size", imp_hdr->size, start_dbg, DBG_LEVEL_3);
+	imp_hdr = (krn_import_header_t *)((size_t)hdr + (size_t)(hdr->import));
+	exp_hdr = (krn_export_header_t *)((size_t)hdr + (size_t)(hdr->export));
 
-    return;
+	printf("[%%] |>>>>----- VERTIGO ----<<<<|\n");
+	printf("[%%] release number : %s\n", gen_add_base(VERSION_RELEASE_NUMBER));
+	printf("[%%] commit number : %s\n", gen_add_base(VERSION_COMMIT_NUMBER));
+	printf("[%%] build data time : %s\n", gen_add_base(VERSION_BUILD_DATE_TIME));
+
+	printf("[%%] hdr->callsign : %x\n", hdr->callsign);
+	printf("[%%] hdr->import : %x\n", hdr->import);
+	printf("[%%] hdr->export : %x\n", hdr->export);
+	printf("[%%] hdr->storage : %x\n", hdr->storage);
+
+	printf("[%%] imports\n");
+	printf("[%%] operating system : %x\n", imp_hdr->operating_system);
+    printf("[%%] virtual_address : %x\n", imp_hdr->virtual_address);
+    printf("[%%] physical_address : %x\n", imp_hdr->physical_address);
+    printf("[%%] size : %x\n", imp_hdr->size);
+
+	printf("[%%] exports\n");
+	printf("[%%] number of functions: %d\n", exp_hdr->functions_size);
+
+	functions = (gen_export_function_t *)gen_add_base(exp_hdr->functions);
+
+	for(i = 0; i < exp_hdr->functions_size; i++) {
+
+		if((i < 0xA) || (i > (exp_hdr->functions_size - 0xA))) {
+			printf("[%%] name: %s, address : %p, size :%x\n", functions->string, functions->address, functions->size);
+		}
+		else if(i == 0xA) {
+			printf("[%%] ...\n");
+		}
+
+		functions = (gen_export_function_t *)(((size_t)functions) + functions->size);
+	}
+
+	return;
 }
+
 
 result_t start_verify_kernel(void) {
 

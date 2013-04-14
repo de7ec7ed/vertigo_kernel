@@ -41,7 +41,7 @@
 #include <kernel/ldr.h>
 
 
-DBG_DEFINE_VARIABLE(ldr_dbg, DBG_LEVEL_3);
+DBG_DEFINE_VARIABLE(ldr_dbg, DBG_LEVEL_2);
 
 ldr_module_t *ldr_modules = NULL;
 ldr_function_t *ldr_functions = NULL;
@@ -75,6 +75,9 @@ result_t ldr_call_handler(call_handler_t *handler, void *data, gen_general_purpo
 	// TODO: modify the domain registers to allow cross domain reads
 	// from the system. This is just to make sure nothing bad happens
 	// here. Neither Android nor iOS use domains for separation
+
+	// TODO: maybe we should just use registers to pass things or physical addresses
+	// registers would eliminate the need to sync memory between the microvisor and OS
 
 	if(registers->r2 == LDR_ADD_MODULE) {
 

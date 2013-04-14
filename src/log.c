@@ -282,7 +282,8 @@ result_t log_vprintf(const char *fmt, va_list args) {
 				fmt++;
 			}
 		}
-		else if(*fmt == '\n') {
+
+		if(*fmt == '\n') {
 
 			if(log_putc('\r') != SUCCESS) {
 				return FAILURE;

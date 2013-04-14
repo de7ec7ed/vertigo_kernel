@@ -44,7 +44,7 @@ import_functions:
 
 // sys_export_header
 export_header:
-VARIABLE(export_functions_size) .word 100
+VARIABLE(export_functions_size) .word 137
 VARIABLE(export_functions_address) .word export_functions
 
 export_functions:
@@ -114,25 +114,37 @@ GEN_EXPORT_FUNCTION cac_clean_mva_to_poc_data_cache
 GEN_EXPORT_FUNCTION cac_flush_mva_to_poc_data_cache
 GEN_EXPORT_FUNCTION cac_flush_entire_data_cache
 
-// dbglib 5
+// dbglib 12
+GEN_EXPORT_FUNCTION mem_init
+GEN_EXPORT_FUNCTION mem_fini
+GEN_EXPORT_FUNCTION mem_putc
+GEN_EXPORT_FUNCTION mem_write
+GEN_EXPORT_FUNCTION mem_print
 GEN_EXPORT_FUNCTION ser_init
 GEN_EXPORT_FUNCTION ser_fini
+GEN_EXPORT_FUNCTION ser_putc
 GEN_EXPORT_FUNCTION ser_write
+GEN_EXPORT_FUNCTION ser_getc
 GEN_EXPORT_FUNCTION ser_read
 GEN_EXPORT_FUNCTION ser_print
 
-// stdlib 9
+// stdlib 14
 GEN_EXPORT_FUNCTION memcpy
 GEN_EXPORT_FUNCTION memset
-GEN_EXPORT_FUNCTION strlen
 GEN_EXPORT_FUNCTION memcmp
+GEN_EXPORT_FUNCTION strlen
+GEN_EXPORT_FUNCTION strcat
+GEN_EXPORT_FUNCTION strncat
+GEN_EXPORT_FUNCTION strcpy
+GEN_EXPORT_FUNCTION strncpy
 GEN_EXPORT_FUNCTION reverse
+GEN_EXPORT_FUNCTION ltoa
 GEN_EXPORT_FUNCTION itoa
 GEN_EXPORT_FUNCTION atoi
 GEN_EXPORT_FUNCTION isspace
 GEN_EXPORT_FUNCTION isdigit
 
-// system 24
+// system 48
 GEN_EXPORT_FUNCTION mas_alloc
 GEN_EXPORT_FUNCTION mas_free
 GEN_EXPORT_FUNCTION mas_get_debug_level
@@ -145,9 +157,9 @@ GEN_EXPORT_FUNCTION mmu_map
 GEN_EXPORT_FUNCTION mmu_unmap
 GEN_EXPORT_FUNCTION mmu_get_debug_level
 GEN_EXPORT_FUNCTION mmu_set_debug_level
-GEN_EXPORT_FUNCTION vec_add_handler
-GEN_EXPORT_FUNCTION vec_lookup_handler
-GEN_EXPORT_FUNCTION vec_remove_handler
+GEN_EXPORT_FUNCTION vec_register_handler
+GEN_EXPORT_FUNCTION vec_find_handler
+GEN_EXPORT_FUNCTION vec_unregister_handler
 GEN_EXPORT_FUNCTION vec_get_debug_level
 GEN_EXPORT_FUNCTION vec_set_debug_level
 GEN_EXPORT_FUNCTION ldr_add_module
@@ -157,6 +169,31 @@ GEN_EXPORT_FUNCTION ldr_lookup_function
 GEN_EXPORT_FUNCTION ldr_remove_function
 GEN_EXPORT_FUNCTION ldr_get_debug_level
 GEN_EXPORT_FUNCTION ldr_set_debug_level
+GEN_EXPORT_FUNCTION log_init
+GEN_EXPORT_FUNCTION log_fini
+GEN_EXPORT_FUNCTION log_call_handler
+GEN_EXPORT_FUNCTION log_call_init_handler
+GEN_EXPORT_FUNCTION log_call_buffer_size_handler
+GEN_EXPORT_FUNCTION log_call_buffer_value_handler
+GEN_EXPORT_FUNCTION log_call_fini_handler
+GEN_EXPORT_FUNCTION log_putc
+GEN_EXPORT_FUNCTION log_write
+GEN_EXPORT_FUNCTION log_printf
+GEN_EXPORT_FUNCTION log_vprintf
+GEN_EXPORT_FUNCTION log_get_debug_level
+GEN_EXPORT_FUNCTION log_set_debug_level
+GEN_EXPORT_FUNCTION lst_init
+GEN_EXPORT_FUNCTION lst_fini
+GEN_EXPORT_FUNCTION lst_add_before_item
+GEN_EXPORT_FUNCTION lst_add_after_item
+GEN_EXPORT_FUNCTION lst_remove_item
+GEN_EXPORT_FUNCTION lst_get_data
+GEN_EXPORT_FUNCTION lst_set_data
+GEN_EXPORT_FUNCTION lst_get_next_item
+GEN_EXPORT_FUNCTION lst_get_previous_item
+GEN_EXPORT_FUNCTION lst_get_head_item
+GEN_EXPORT_FUNCTION lst_get_first_item
+GEN_EXPORT_FUNCTION lst_get_last_item
 
 // sys_storage_header
 storage_header:

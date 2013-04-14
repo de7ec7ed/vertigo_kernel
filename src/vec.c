@@ -36,17 +36,37 @@
 #include <stdlib/check.h>
 #include <stdlib/string.h>
 
-#include <mas.h>
-#include <mmu.h>
-#include <vec.h>
+#include <kernel/lst.h>
+#include <kernel/mas.h>
+#include <kernel/mmu.h>
+#include <kernel/vec.h>
 
 DBG_DEFINE_VARIABLE(vec_dbg, DBG_LEVEL_2);
 
-vec_handler_t *vec_handlers = NULL;
+lst_item_t *vec_list = NULL;
 
 result_t vec_init(void) {
 
+	lst_item_t **vl;
+	lst_item_t *tmp;
+	vec_handler_t *handler;
+
 	DBG_LOG_FUNCTION(vec_dbg, DBG_LEVEL_3);
+
+	vl = gen_add_base(&vec_list);
+
+	handler = malloc(sizeof(vec_handler_t));
+
+	CHECK_NOT_NULL(handler, "unable to allocate memory for handler", handler, vec_dbg, DBG_LEVEL_2)
+		return FAILURE;
+	CHECK_END
+
+	CHECK_SUCCESS(lst_init(&tmp), "unable to init the list", &tmp, vec_dbg, DBG_LEVEL_3)
+		free(handler);
+		return FAILURE;
+	CHECK_END
+
+	*vl = tmp;
 
 	// allocate space for new stacks in each of the vectors
 	*(size_t **)gen_add_base(&vec_new_stack_rst) = malloc(FOUR_KILOBYTES * 2) + (FOUR_KILOBYTES * 2);
@@ -93,13 +113,13 @@ result_t vec_init(void) {
 
 	// register a default handler for each of the vectors
 
-	vec_add_handler(VEC_RESET_VECTOR, gen_add_base(vec_default_handler), NULL);
-	vec_add_handler(VEC_UNDEFINED_INSTRUCTION_VECTOR, gen_add_base(vec_default_handler), NULL);
-	vec_add_handler(VEC_SUPERVISOR_CALL_VECTOR, gen_add_base(vec_default_handler), NULL);
-	vec_add_handler(VEC_PREFETCH_ABORT_VECTOR, gen_add_base(vec_default_handler), NULL);
-	vec_add_handler(VEC_DATA_ABORT_VECTOR, gen_add_base(vec_default_handler), NULL);
-	vec_add_handler(VEC_INTERRUPT_VECTOR, gen_add_base(vec_default_handler), NULL);
-	vec_add_handler(VEC_FAST_INTERRUPT_VECTOR, gen_add_base(vec_default_handler), NULL);
+	vec_register_handler(VEC_RESET_VECTOR, gen_add_base(vec_default_handler), NULL);
+	vec_register_handler(VEC_UNDEFINED_INSTRUCTION_VECTOR, gen_add_base(vec_default_handler), NULL);
+	vec_register_handler(VEC_SUPERVISOR_CALL_VECTOR, gen_add_base(vec_default_handler), NULL);
+	vec_register_handler(VEC_PREFETCH_ABORT_VECTOR, gen_add_base(vec_default_handler), NULL);
+	vec_register_handler(VEC_DATA_ABORT_VECTOR, gen_add_base(vec_default_handler), NULL);
+	vec_register_handler(VEC_INTERRUPT_VECTOR, gen_add_base(vec_default_handler), NULL);
+	vec_register_handler(VEC_FAST_INTERRUPT_VECTOR, gen_add_base(vec_default_handler), NULL);
 
 	return SUCCESS;
 }
@@ -213,13 +233,13 @@ result_t vec_patch(mmu_paging_system_t *ps) {
 	//p[EXC_FAST_INTERRUPT_INDEX] = vec_LDR_INSTRUCTION;
 
 	// load the address of the new handlers
-	//p[EXC_NUMBER_OF_VECTORS + EXC_RESET_INDEX] = (size_t)gen_add_base(vec_asm_handler_rst);
-	p[EXC_NUMBER_OF_VECTORS + EXC_UNDEFINED_INSTRUCTION_INDEX] = (size_t)gen_add_base(vec_asm_handler_und);
-	p[EXC_NUMBER_OF_VECTORS + EXC_SUPERVISOR_CALL_INDEX] = (size_t)gen_add_base(vec_asm_handler_svc);
-	p[EXC_NUMBER_OF_VECTORS + EXC_PREFETCH_ABORT_INDEX] = (size_t)gen_add_base(vec_asm_handler_pabt);
-	p[EXC_NUMBER_OF_VECTORS + EXC_DATA_ABORT_INDEX] = (size_t)gen_add_base(vec_asm_handler_dabt);
-	p[EXC_NUMBER_OF_VECTORS + EXC_INTERRUPT_INDEX] = (size_t)gen_add_base(vec_asm_handler_irq);
-	//p[EXC_NUMBER_OF_VECTORS + EXC_FAST_INTERRUPT_INDEX] = (size_t)gen_add_base(vec_asm_handler_fiq);
+	//p[EXC_NUMBER_OF_VECTORS + EXC_RESET_INDEX] = (size_t)gen_add_base(&vec_asm_handler_rst);
+	p[EXC_NUMBER_OF_VECTORS + EXC_UNDEFINED_INSTRUCTION_INDEX] = (size_t)gen_add_base(&vec_asm_handler_und);
+	p[EXC_NUMBER_OF_VECTORS + EXC_SUPERVISOR_CALL_INDEX] = (size_t)gen_add_base(&vec_asm_handler_svc);
+	p[EXC_NUMBER_OF_VECTORS + EXC_PREFETCH_ABORT_INDEX] = (size_t)gen_add_base(&vec_asm_handler_pabt);
+	p[EXC_NUMBER_OF_VECTORS + EXC_DATA_ABORT_INDEX] = (size_t)gen_add_base(&vec_asm_handler_dabt);
+	p[EXC_NUMBER_OF_VECTORS + EXC_INTERRUPT_INDEX] = (size_t)gen_add_base(&vec_asm_handler_irq);
+	//p[EXC_NUMBER_OF_VECTORS + EXC_FAST_INTERRUPT_INDEX] = (size_t)gen_add_base(&vec_asm_handler_fiq);
 
 	cac_flush_entire_data_cache();
 
@@ -288,7 +308,7 @@ result_t vec_instruction_to_address(size_t instruction, size_t instruction_addre
 	return SUCCESS;
 }
 
-result_t vec_default_handler(vec_handler_t *handler, size_t *handled, gen_general_purpose_registers_t *registers) {
+result_t vec_default_handler(vec_handler_t *handler, bool_t *handled, gen_general_purpose_registers_t *registers) {
 
 	DBG_LOG_FUNCTION(vec_dbg, DBG_LEVEL_3);
 
@@ -321,104 +341,96 @@ result_t vec_default_handler(vec_handler_t *handler, size_t *handled, gen_genera
 	return SUCCESS;
 }
 
-result_t vec_add_handler(size_t vector, vec_function_t function, void *data) {
+result_t vec_register_handler(size_t vector, vec_function_t function, void *data) {
 
-	vec_handler_t **head = NULL;
-	vec_handler_t *handler = NULL;
+	lst_item_t *vl;
+	vec_handler_t *handler;
 
 	DBG_LOG_FUNCTION(vec_dbg, DBG_LEVEL_3);
 
-	head = gen_add_base(&vec_handlers);
+	vl = *(lst_item_t **)gen_add_base(&vec_list);
 
 	handler = malloc(sizeof(vec_handler_t));
 
-	CHECK_NOT_NULL(handler, "handler is null", handler, vec_dbg, DBG_LEVEL_2)
+	CHECK_NOT_NULL(handler, "unable to allocate memory for the handler", handler, vec_dbg, DBG_LEVEL_2)
 		return FAILURE;
 	CHECK_END
 
-	memset(handler, 0, sizeof(vec_handler_t));
+	CHECK_SUCCESS(lst_add_item(&vl), "unable to add item", handler, vec_dbg, DBG_LEVEL_2)
+		free(handler);
+		return FAILURE;
+	CHECK_END
 
-	handler->prev = NULL;
 	handler->vector = vector;
 	handler->function = function;
 	handler->data = data;
-	handler->next = *head;
 
-	if(*head != NULL) {
-		(*head)->prev = handler;
-	}
-
-	*head = handler;
+	lst_set_data(vl, handler);
 
 	return SUCCESS;
 }
 
-result_t vec_lookup_handler(size_t vector, vec_handler_t **handler) {
+result_t vec_find_handler(lst_item_t **item, size_t vector) {
 
-	vec_handler_t **head;
-
-	CHECK_NOT_NULL(handler, "handler is null", handler, vec_dbg, DBG_LEVEL_2)
-		return FAILURE;
-	CHECK_END
-
-	if(*handler == NULL) {
-		head = gen_add_base(&vec_handlers);
-
-		CHECK_NOT_NULL(head, "head is null", head, vec_dbg, DBG_LEVEL_2)
-			return FAILURE;
-		CHECK_END
-
-		*handler = *head;
-	}
-	else {
-		*handler = (*handler)->next;
-	}
-
-	while(*handler != NULL) {
-		if((*handler)->vector == vector) {
-			return SUCCESS;
-		}
-		*handler = (*handler)->next;
-	}
-
-	return FAILURE;
-}
-
-result_t vec_remove_handler(vec_handler_t *handler) {
-
-	vec_handler_t **head;
+	vec_handler_t *handler;
 
 	DBG_LOG_FUNCTION(vec_dbg, DBG_LEVEL_3);
 
-	CHECK_NOT_NULL(handler, "handler is null", handler, vec_dbg, DBG_LEVEL_2)
+	CHECK_NOT_NULL(item, "item is null", item, vec_dbg, DBG_LEVEL_2)
 		return FAILURE;
 	CHECK_END
 
-	head = gen_add_base(&vec_handlers);
+    while((*item) != NULL) {
 
+    	lst_get_data(*item, (void **)&handler);
 
-	if(handler == *head) {
-		*head = handler->next;
-	}
-	else {
-		if(handler->prev != NULL) {
-			handler->prev->next = handler->next;
+    	if(handler->vector == vector) {
+            return SUCCESS;
+        }
+
+    	CHECK_SUCCESS(lst_get_next_item(*item, item), "unable to get the next item", *item, vec_dbg, DBG_LEVEL_2)
+    		return FAILURE;
+    	CHECK_END
+    }
+
+    return SUCCESS;
+}
+
+result_t vec_unregister_handler(size_t vector, vec_function_t function) {
+
+	lst_item_t *vl;
+	vec_handler_t *handler;
+
+	DBG_LOG_FUNCTION(vec_dbg, DBG_LEVEL_3);
+
+	vl = *(lst_item_t **)gen_add_base(&vec_list);
+
+	while((vec_find_handler(&vl, vector) == SUCCESS) && (vl != NULL)) {
+
+    	lst_get_data(vl, (void **)&handler);
+
+		if (handler->function == function) {
+
+			CHECK_SUCCESS(lst_remove_item(vl), "unable to remove item", vl, vec_dbg, DBG_LEVEL_2)
+				return FAILURE;
+			CHECK_END
+
+			free(handler);
+			break;
 		}
-		if(handler->next != NULL) {
-			handler->next->prev = handler->prev;
-		}
-	}
 
-	free(handler);
+		lst_get_next_item(vl, &vl);
+	}
 
 	return SUCCESS;
 }
 
 result_t vec_dispatch_handler(size_t vector, gen_general_purpose_registers_t *registers) {
 
-	vec_handler_t *handler = NULL;
+	lst_item_t *vl;
+	vec_handler_t *tmp;
 	gen_program_status_register_t spsr;
-	size_t *handled = NULL;
+	bool_t *handled;
 	result_t result;
 
 	// make sure that everything done here is atomic
@@ -456,18 +468,34 @@ result_t vec_dispatch_handler(size_t vector, gen_general_purpose_registers_t *re
 		return FAILURE;
 	}
 
+	vl = *(lst_item_t **)gen_add_base(&vec_list);
+
+	CHECK_SUCCESS(lst_get_first_item(vl, &vl), "unable to get the first item", vl, vec_dbg, DBG_LEVEL_2)
+		return FAILURE;
+	CHECK_END
+
 	*handled = FALSE;
 
-	while(vec_lookup_handler(vector, &handler) == SUCCESS) {
-		CHECK_SUCCESS(handler->function(handler, handled, registers), "handler returned failure", FAILURE, vec_dbg, DBG_LEVEL_2)
+	result = SUCCESS;
+
+	while(1) {
+
+		CHECK_SUCCESS(vec_find_handler(&vl, vector), "unable to locate vec handler", vector, vec_dbg, DBG_LEVEL_2)
+				return FAILURE;
+		CHECK_END
+
+		if(vl == NULL) { break; }
+
+		lst_get_data(vl, (void **)&tmp);
+
+		CHECK_SUCCESS(tmp->function(tmp, handled, registers), "handler returned failure", FAILURE, vec_dbg, DBG_LEVEL_2)
 			result = FAILURE;
 			break;
 		CHECK_END
 
-		if(*handled == TRUE) {
-			result = SUCCESS;
-			break;
-		}
+    	CHECK_SUCCESS(lst_get_next_item(vl, &vl), "unable to get the next item", vl, vec_dbg, DBG_LEVEL_2)
+    		return FAILURE;
+    	CHECK_END
 	}
 
 	CHECK_SUCCESS(mmu_switch_paging_system(MMU_SWITCH_EXTERNAL), "unable to switch paging systems", FAILURE, vec_dbg, DBG_LEVEL_2)
