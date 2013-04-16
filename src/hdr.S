@@ -44,7 +44,7 @@ import_functions:
 
 // sys_export_header
 export_header:
-VARIABLE(export_functions_size) .word 137
+VARIABLE(export_functions_size) .word 138
 VARIABLE(export_functions_address) .word export_functions
 
 export_functions:
@@ -144,7 +144,7 @@ GEN_EXPORT_FUNCTION atoi
 GEN_EXPORT_FUNCTION isspace
 GEN_EXPORT_FUNCTION isdigit
 
-// system 48
+// system 49
 GEN_EXPORT_FUNCTION mas_alloc
 GEN_EXPORT_FUNCTION mas_free
 GEN_EXPORT_FUNCTION mas_get_debug_level

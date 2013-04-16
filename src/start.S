@@ -22,7 +22,7 @@
 // start of flat binary
 
 #include <defines.h>
-#include <start.h>
+#include <kernel/start.h>
 #include <armv7lib/int.h>
 
 SECTION(start)

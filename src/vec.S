@@ -23,7 +23,7 @@
 
 #include <armv7lib/gen.h>
 
-#include <vec.h>
+#include <kernel/vec.h>
 
 VEC_ASM_HANDLER rst, VEC_RESET_VECTOR
 VEC_ASM_HANDLER und, VEC_UNDEFINED_INSTRUCTION_VECTOR

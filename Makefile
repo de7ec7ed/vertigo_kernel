@@ -38,6 +38,7 @@ OBJECTS += $(OBJECTSDIR)/fxplib.o
 all:
 	@$(MAKE) -s check
 	@$(MAKE) -s clean
+	@$(MAKE) version
 	@$(MAKE) -s includes
 	@$(MAKE) -s build
 

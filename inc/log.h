@@ -30,19 +30,15 @@ struct log_state {
 
 extern result_t log_init(void);
 extern result_t log_fini(void);
-
 extern result_t log_call_handler(call_handler_t *handler, void *data, gen_general_purpose_registers_t *registers);
-
 extern result_t log_call_init_handler(log_state_t *state);
 extern result_t log_call_buffer_size_handler(log_state_t *state, gen_general_purpose_registers_t *registers);
 extern result_t log_call_buffer_value_handler(log_state_t *state, gen_general_purpose_registers_t *registers);
 extern result_t log_call_fini_handler(log_state_t *state);
-
 extern result_t log_putc(u8_t c);
 extern result_t log_write(u8_t *buffer, size_t size);
 extern result_t log_printf(const char *fmt, ...);
 extern result_t log_vprintf(const char *fmt, va_list args);
-
 extern result_t log_get_debug_level(size_t *level);
 extern result_t log_set_debug_level(size_t level);
 

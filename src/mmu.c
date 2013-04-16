@@ -19,11 +19,13 @@
  * Written by Kirk Swidowski <kirk@swidowski.com>
  */
 
-#include <config.h>
+
 #include <defines.h>
 #include <types.h>
-#include <mmu.h>
-#include <mas.h>
+
+#include <kernel/config.h>
+#include <kernel/mmu.h>
+#include <kernel/mas.h>
 
 #include <armv7lib/vmsa/gen.h>
 #include <armv7lib/vmsa/tt.h>
@@ -40,10 +42,10 @@
 
 DBG_DEFINE_VARIABLE(mmu_dbg, DBG_LEVEL_1);
 
-mmu_lookup_t *mmu_table;
-size_t mmu_size;
+mmu_lookup_t *mmu_table = NULL;
+size_t mmu_size = 0;
 
-mmu_paging_system_t *mmu_paging_system;
+mmu_paging_system_t *mmu_paging_system = NULL;
 
 result_t mmu_lookup_init(tt_virtual_address_t va, size_t size) {
 

@@ -29,8 +29,8 @@
 #include <dbglib/ser.h>
 #include <fxplib/gen.h>
 
-#include <mas.h>
-#include <end.h>
+#include <kernel/mas.h>
+#include <kernel/end.h>
 
 size_t mas_size = 0; // number of blocks in the table
 mas_block_t *mas_table = NULL; // base address of the table

@@ -56,51 +56,29 @@ extern size_t mmu_size;
 extern mmu_paging_system_t *mmu_paging_system;
 
 extern result_t mmu_lookup_init(tt_virtual_address_t va, size_t size);
-
+extern result_t mmu_lookup_fini();
 extern result_t mmu_lookup_va(tt_physical_address_t pa, tt_virtual_address_t *va);
-
 extern result_t mmu_lookup_pa(tt_virtual_address_t va, tt_physical_address_t *pa);
 
-extern result_t mmu_lookup_fini();
-
 extern result_t mmu_paging_system_init(void);
-
-extern result_t mmu_switch_paging_system(size_t type);
-
-extern result_t mmu_get_paging_system(size_t type, mmu_paging_system_t *ps);
-
 extern result_t mmu_paging_system_fini(void);
-
+extern result_t mmu_switch_paging_system(size_t type);
+extern result_t mmu_get_paging_system(size_t type, mmu_paging_system_t *ps);
 extern result_t mmu_map(tt_physical_address_t pa, size_t size, size_t options, tt_virtual_address_t *va);
-
 extern result_t mmu_map_internal(tt_physical_address_t pa, size_t size, size_t options, tt_virtual_address_t *va);
-
 extern result_t mmu_map_internal_small_page(tt_physical_address_t pa, size_t options, tt_virtual_address_t *va);
-
 extern result_t mmu_map_internal_section(tt_physical_address_t pa, size_t options, tt_virtual_address_t *va);
-
 extern result_t mmu_map_external(tt_physical_address_t pa, size_t size, size_t options, tt_virtual_address_t *va);
-
 extern result_t mmu_map_external_small_page(tt_physical_address_t pa, size_t options, tt_virtual_address_t *va);
-
 extern result_t mmu_map_external_section(tt_physical_address_t pa, size_t options, tt_virtual_address_t *va);
-
 extern result_t mmu_unmap(tt_virtual_address_t va, size_t size, size_t options);
-
 extern result_t mmu_unmap_internal(tt_virtual_address_t va, size_t size);
-
 extern result_t mmu_unmap_internal_small_page(tt_virtual_address_t va);
-
 extern result_t mmu_unmap_internal_section(tt_virtual_address_t va);
-
 extern result_t mmu_unmap_external(tt_virtual_address_t va, size_t size);
-
 extern result_t mmu_unmap_external_small_page(tt_virtual_address_t va);
-
 extern result_t mmu_unmap_external_section(tt_virtual_address_t va);
-
 extern result_t mmu_get_debug_level(size_t *level);
-
 extern result_t mmu_set_debug_level(size_t level);
 
 #endif //__C__

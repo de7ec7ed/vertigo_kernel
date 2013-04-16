@@ -27,11 +27,8 @@ extern result_t call_fini(void);
 extern result_t call_register_handler(size_t identifier, call_function_t function, void *data);
 extern result_t call_unregister_handler(size_t identifier, call_function_t function);
 extern result_t call_dispatch(vec_handler_t *handler, bool_t *handled, gen_general_purpose_registers_t *registers);
-
 extern result_t call_find_handler(lst_item_t **item, size_t identifier);
-
 extern result_t call_default_handler(call_handler_t *handler, void *data, gen_general_purpose_registers_t *registers);
-
 extern result_t call_get_debug_level(size_t *level);
 extern result_t call_set_debug_level(size_t level);
 

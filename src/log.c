@@ -14,6 +14,8 @@
 
 DBG_DEFINE_VARIABLE(log_dbg, DBG_LEVEL_2);
 
+log_state_t *ls = NULL;
+
 result_t log_init(void) {
 
 	log_state_t *state;
@@ -28,18 +30,33 @@ result_t log_init(void) {
 
 	memset(state, 0, sizeof(log_state_t));
 
-	CHECK_SUCCESS(call_register_handler(LOG_CALL_IDENTIFIER, gen_add_base(&log_call_handler), state), "unable to add call handler", FAILURE, log_dbg, DBG_LEVEL_2)
+	CHECK_SUCCESS(call_register_handler(LOG_CALL_IDENTIFIER, gen_add_base(&log_call_handler), state), "unable to register the call handler", FAILURE, log_dbg, DBG_LEVEL_2)
+		free(state);
 		return FAILURE;
 	CHECK_END
+
+	*((log_state_t **)gen_add_base(&ls)) = state;
 
 	return SUCCESS;
 }
 
 result_t log_fini(void) {
 
-	// TODO: stuff here
+	log_state_t *state;
 
-	return FAILURE;
+	DBG_LOG_FUNCTION(log_dbg, DBG_LEVEL_3);
+
+	state = *(log_state_t **)gen_add_base(&ls);
+
+	if(state != NULL) {
+		free(state);
+	}
+
+	CHECK_SUCCESS(call_unregister_handler(LOG_CALL_IDENTIFIER, gen_add_base(&log_call_handler)), "unable to unregister the call handler", FAILURE, log_dbg, DBG_LEVEL_2)
+		return FAILURE;
+	CHECK_END
+
+	return SUCCESS;
 }
 
 result_t log_call_handler(call_handler_t *handler, void *data, gen_general_purpose_registers_t *registers) {
@@ -51,13 +68,6 @@ result_t log_call_handler(call_handler_t *handler, void *data, gen_general_purpo
 	identifier = (u32_t)(registers->r2);
 
 	DBG_LOG_STATEMENT("identifier", identifier, log_dbg, DBG_LEVEL_3);
-
-	CHECK_NOT_NULL(handler->data, "handler->data is null", handler->data, log_dbg, DBG_LEVEL_2)
-		registers->r0 = FAILURE;
-		return SUCCESS;
-	CHECK_END
-
-	data = handler->data;
 
 	if(identifier == LOG_FUNCTION_INIT) {
 		CHECK_SUCCESS(log_call_init_handler((log_state_t *)data), "call init function handler failure", identifier, log_dbg, DBG_LEVEL_2)
@@ -116,6 +126,10 @@ result_t log_call_buffer_size_handler(log_state_t *state, gen_general_purpose_re
 
 	DBG_LOG_FUNCTION(log_dbg, DBG_LEVEL_3);
 
+	CHECK_NOT_NULL(state, "unable to allocate memory for the state", state, log_dbg, DBG_LEVEL_2)
+		return FAILURE;
+	CHECK_END
+
 	registers->r1 = (u32_t)(state->size);
 
 	return SUCCESS;
@@ -124,6 +138,10 @@ result_t log_call_buffer_size_handler(log_state_t *state, gen_general_purpose_re
 result_t log_call_buffer_value_handler(log_state_t *state, gen_general_purpose_registers_t *registers) {
 
 	DBG_LOG_FUNCTION(log_dbg, DBG_LEVEL_3);
+
+	CHECK_NOT_NULL(state, "unable to allocate memory for the state", state, log_dbg, DBG_LEVEL_2)
+		return FAILURE;
+	CHECK_END
 
 	if(state->index >= state->size) {
 		return FAILURE;
@@ -148,8 +166,6 @@ result_t log_call_fini_handler(log_state_t *state) {
 	if(state->buffer != NULL) {
 		free(state->buffer);
 	}
-
-	memset(state, 0, sizeof(log_state_t));
 
 	mem_clear();
 

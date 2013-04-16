@@ -55,15 +55,13 @@ extern size_t mas_size; // number of blocks in the table
 extern mas_block_t *mas_table; // base address of the table
 
 extern result_t mas_init(void *address, size_t size);
+extern result_t mas_fini();
 extern void * mas_alloc(size_t alignment, size_t size);
 extern void mas_free(void *ptr);
-extern result_t mas_fini();
-
+extern result_t mas_mark_used(size_t start, size_t end);
+extern result_t mas_mask_free(size_t bn);
 extern result_t mas_get_debug_level(size_t *level);
 extern result_t mas_set_debug_level(size_t level);
-
-result_t mas_mark_used(size_t start, size_t end);
-result_t mas_mask_free(size_t bn);
 
 #endif //__C__
 

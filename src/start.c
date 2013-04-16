@@ -19,9 +19,10 @@
  * Written by Kirk Swidowski <kirk@swidowski.com>
  */
 
-#include <config.h>
 #include <defines.h>
 #include <types.h>
+
+#include <kernel/config.h>
 #include <kernel/call.h>
 #include <kernel/start.h>
 #include <kernel/end.h>

@@ -75,7 +75,6 @@ typedef union vec_arm_single_data_transfer_instruction vec_arm_single_data_trans
 
 typedef union vec_arm_branch_instruction vec_arm_branch_instruction_t;
 
-// FIXME: change handled to a bool_t
 typedef result_t (* vec_function_t)(vec_handler_t *handler, bool_t *handled, gen_general_purpose_registers_t *registers);
 
 struct vec_handler {
@@ -112,25 +111,15 @@ union vec_arm_branch_instruction {
 };
 
 extern result_t vec_init(void);
-
-extern result_t vec_patch(mmu_paging_system_t *ps);
-
-extern size_t vec_instruction_to_address(size_t instruction, size_t instruction_address, size_t *absolute_address);
-
-extern result_t vec_default_handler(vec_handler_t *handler, bool_t *handled, gen_general_purpose_registers_t *registers);
-
-extern result_t vec_register_handler(size_t vector, vec_function_t function, void *data);
-
-extern result_t vec_find_handler(lst_item_t **item, size_t vector);
-
-extern result_t vec_unregister_handler(size_t vector, vec_function_t function);
-
-extern result_t vec_dispatch_handler(size_t vector, gen_general_purpose_registers_t *registers);
-
 extern result_t vec_fini(void);
-
+extern result_t vec_patch(mmu_paging_system_t *ps);
+extern size_t vec_instruction_to_address(size_t instruction, size_t instruction_address, size_t *absolute_address);
+extern result_t vec_default_handler(vec_handler_t *handler, bool_t *handled, gen_general_purpose_registers_t *registers);
+extern result_t vec_register_handler(size_t vector, vec_function_t function, void *data);
+extern result_t vec_find_handler(lst_item_t **item, size_t vector);
+extern result_t vec_unregister_handler(size_t vector, vec_function_t function);
+extern result_t vec_dispatch_handler(size_t vector, gen_general_purpose_registers_t *registers);
 extern result_t vec_get_debug_level(size_t *level);
-
 extern result_t vec_set_debug_level(size_t level);
 
 #endif //__C__
