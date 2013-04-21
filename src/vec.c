@@ -405,11 +405,15 @@ result_t vec_unregister_handler(size_t vector, vec_function_t function) {
 
 	vl = *(lst_item_t **)gen_add_base(&vec_list);
 
+	CHECK_SUCCESS(lst_get_first_item(vl, &vl), "unable to get the first item", vl, vec_dbg, DBG_LEVEL_2)
+		return FAILURE;
+	CHECK_END
+
 	while((vec_find_handler(&vl, vector) == SUCCESS) && (vl != NULL)) {
 
     	lst_get_data(vl, (void **)&handler);
 
-		if (handler->function == function) {
+		if(handler->function == function) {
 
 			CHECK_SUCCESS(lst_remove_item(vl), "unable to remove item", vl, vec_dbg, DBG_LEVEL_2)
 				return FAILURE;
