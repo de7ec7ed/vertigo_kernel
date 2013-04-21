@@ -59,6 +59,7 @@ result_t start_c() {
 	size_t mas_size;
 	void *org_sp = NULL;
 	void *cur_sp = NULL;
+	result_t result;
 
 	//-------------------------//
 	//      START BRING UP     //
@@ -150,7 +151,7 @@ result_t start_c() {
 	//      END BRING UP     //
 	//-----------------------//
 
-	start_run();
+	result = start_run();
 
 	//--------------------------//
 	//     START TEAR DOWN      //
@@ -192,7 +193,7 @@ result_t start_c() {
 	//     END TEST AREA      //
 	//------------------------//
 
-	return SUCCESS;
+	return result;
 }
 
 result_t start_run(void) {
