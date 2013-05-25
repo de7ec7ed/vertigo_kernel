@@ -26,7 +26,10 @@
 #include <armv7lib/int.h>
 #include <armv7lib/exc.h>
 #include <armv7lib/cmsa/cac.h>
+#include <armv7lib/vmsa/gen.h>
 #include <armv7lib/vmsa/tt.h>
+
+#include <armv7lib/vmsa/tlb.h>
 
 #include <dbglib/gen.h>
 #include <dbglib/ser.h>
@@ -36,6 +39,7 @@
 #include <stdlib/check.h>
 #include <stdlib/string.h>
 
+#include <kernel/log.h>
 #include <kernel/lst.h>
 #include <kernel/mas.h>
 #include <kernel/mmu.h>
@@ -132,24 +136,34 @@ result_t vec_patch(mmu_paging_system_t *ps) {
 	tt_physical_address_t pa;
 	tt_first_level_descriptor_t fld;
 	tt_second_level_descriptor_t sld;
+	gen_system_control_register_t sctlr;
+	tt_translation_table_base_register_t ttbr;
 	size_t *p;
 
 	DBG_LOG_FUNCTION(vec_dbg, DBG_LEVEL_3);
 
-	CHECK_SUCCESS(tt_ttbr_to_pa(ps->ttbr1, &pa), "unable to convert ttbr to pa", ps->ttbr1.all, vec_dbg, DBG_LEVEL_2)
+	sctlr = gen_get_sctlr();
+
+	// It is assumed that the SoC implements security extensions
+	if(sctlr.fields.v == FALSE) {
+		// TODO: use the vector base address register
+		va.all = EXC_VECTOR_TABLE_LOW_ADDRESS;
+	}
+	else {
+		va.all = EXC_VECTOR_TABLE_HIGH_ADDRESS;
+	}
+
+	CHECK_SUCCESS(tt_select_ttbr(va, ps->ttbr0, ps->ttbr1, ps->ttbcr, &ttbr), "unable to select the correct ttbr", va.all, vec_dbg, DBG_LEVEL_2)
 		return FAILURE;
 	CHECK_END
 
-	CHECK_SUCCESS(mmu_map(pa, (TT_NUMBER_LEVEL_1_ENTRIES * sizeof(tt_first_level_descriptor_t)), MMU_MAP_INTERNAL | MMU_MAP_CACHEABLE | MMU_MAP_BUFFERABLE, &l1), "unable to map pa", pa.all, vec_dbg, DBG_LEVEL_2)
+	CHECK_SUCCESS(tt_ttbr_to_pa(ttbr, &pa), "unable to convert ttbr to pa", ttbr.all, vec_dbg, DBG_LEVEL_2)
 		return FAILURE;
 	CHECK_END
 
-	// assume the vector table is high
-	// TODO: we should check the bit that says if they are high
-	// some newer socs may choose to use the vector base address register
-	// mainly ones that use security extensions.
-
-	va.all = EXC_VECTOR_TABLE_HIGH_ADDRESS;
+	CHECK_SUCCESS(mmu_map(pa, (TT_NUMBER_LEVEL_1_ENTRIES * sizeof(tt_first_level_descriptor_t)), MMU_MAP_INTERNAL | MMU_MAP_NORMAL_MEMORY, &l1), "unable to map pa", pa.all, vec_dbg, DBG_LEVEL_2)
+		return FAILURE;
+	CHECK_END
 
 	CHECK_SUCCESS(tt_get_fld(va, l1, &fld), "unable to get fld", va.all, vec_dbg, DBG_LEVEL_2)
 		return FAILURE;
@@ -163,7 +177,7 @@ result_t vec_patch(mmu_paging_system_t *ps) {
 		return FAILURE;
 	CHECK_END
 
-	CHECK_SUCCESS(mmu_map(pa, (TT_NUMBER_LEVEL_2_ENTRIES * sizeof(tt_second_level_descriptor_t)), MMU_MAP_INTERNAL | MMU_MAP_CACHEABLE | MMU_MAP_BUFFERABLE, &l2), "unable to map pa", pa.all, vec_dbg, DBG_LEVEL_2)
+	CHECK_SUCCESS(mmu_map(pa, (TT_NUMBER_LEVEL_2_ENTRIES * sizeof(tt_second_level_descriptor_t)), MMU_MAP_INTERNAL | MMU_MAP_NORMAL_MEMORY, &l2), "unable to map pa", pa.all, vec_dbg, DBG_LEVEL_2)
 		return FAILURE;
 	CHECK_END
 
@@ -175,7 +189,7 @@ result_t vec_patch(mmu_paging_system_t *ps) {
 		return FAILURE;
 	CHECK_END
 
-	CHECK_SUCCESS(mmu_map(pa, FOUR_KILOBYTES, MMU_MAP_INTERNAL | MMU_MAP_CACHEABLE | MMU_MAP_BUFFERABLE, &va), "unable to map pa", pa.all, vec_dbg, DBG_LEVEL_2)
+	CHECK_SUCCESS(mmu_map(pa, FOUR_KILOBYTES, MMU_MAP_INTERNAL | MMU_MAP_NORMAL_MEMORY, &va), "unable to map pa", pa.all, vec_dbg, DBG_LEVEL_2)
 		return FAILURE;
 	CHECK_END
 
@@ -240,8 +254,6 @@ result_t vec_patch(mmu_paging_system_t *ps) {
 	p[EXC_NUMBER_OF_VECTORS + EXC_DATA_ABORT_INDEX] = (size_t)gen_add_base(&vec_asm_handler_dabt);
 	p[EXC_NUMBER_OF_VECTORS + EXC_INTERRUPT_INDEX] = (size_t)gen_add_base(&vec_asm_handler_irq);
 	//p[EXC_NUMBER_OF_VECTORS + EXC_FAST_INTERRUPT_INDEX] = (size_t)gen_add_base(&vec_asm_handler_fiq);
-
-	cac_flush_entire_data_cache();
 
 	CHECK_SUCCESS(mmu_unmap(va, FOUR_KILOBYTES, MMU_MAP_INTERNAL), "unable to unmap the va", l2.all, vec_dbg, DBG_LEVEL_2)
 		return FAILURE;

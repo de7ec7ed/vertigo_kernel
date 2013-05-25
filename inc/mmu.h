@@ -23,12 +23,15 @@
 #define __MMU_H__
 
 #include <types.h>
+#include <armv7lib/vmsa/gen.h>
 #include <armv7lib/vmsa/tt.h>
 
-#define MMU_MAP_CACHEABLE  (1 << 0)
-#define MMU_MAP_BUFFERABLE (1 << 1)
-#define MMU_MAP_INTERNAL   (1 << 2)
-#define MMU_MAP_EXTERNAL   (1 << 3)
+#define MMU_MAP_NORMAL_MEMORY           (1 << 0)
+#define MMU_MAP_DEVICE_MEMORY           (1 << 1)
+#define MMU_MAP_STRONGLY_ORDERED_MEMORY (1 << 2)
+#define MMU_MAP_EXECUTE_NEVER           (1 << 3)
+#define MMU_MAP_INTERNAL                (1 << 4)
+#define MMU_MAP_EXTERNAL                (1 << 5)
 
 #define MMU_SWITCH_EXTERNAL 0
 #define MMU_SWITCH_INTERNAL 1
@@ -80,6 +83,12 @@ extern result_t mmu_unmap_external_small_page(tt_virtual_address_t va);
 extern result_t mmu_unmap_external_section(tt_virtual_address_t va);
 extern result_t mmu_get_debug_level(size_t *level);
 extern result_t mmu_set_debug_level(size_t level);
+
+extern result_t mmu_get_strongly_ordered_attributes(gen_primary_region_remap_register_t prrr, size_t *tr, size_t *nos, size_t *ir, size_t *or, size_t *tex, size_t *c, size_t *b, size_t *s);
+extern result_t mmu_get_device_attributes(gen_primary_region_remap_register_t prrr, size_t *tr, size_t *nos, size_t *ir, size_t *or, size_t *tex, size_t *c, size_t *b, size_t *s);
+extern result_t mmu_get_normal_memory_attributes(gen_primary_region_remap_register_t prrr, size_t *tr, size_t *nos, size_t *ir, size_t *or, size_t *tex, size_t *c, size_t *b, size_t *s);
+extern result_t mmu_set_section_attributes(tt_first_level_descriptor_t *fld, size_t options);
+extern result_t mmu_set_small_page_attributes(tt_second_level_descriptor_t *sld, size_t options);
 
 #endif //__C__
 

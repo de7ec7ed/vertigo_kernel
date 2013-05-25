@@ -16,7 +16,8 @@ HDRFILES += $(INCDIR)/ldr.h
 
 SRCFILES := start.S start.c
 SRCFILES += call.c
-SRCFILES += mas.c mmu.c
+SRCFILES += mas.c
+SRCFILES += mmu.c
 SRCFILES += vec.S vec.c
 SRCFILES += log.c
 SRCFILES += ldr.S ldr.c

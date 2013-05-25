@@ -27,10 +27,11 @@
 #include <kernel/mmu.h>
 #include <kernel/mas.h>
 
+#include <armv7lib/cpuid.h>
+#include <armv7lib/cmsa/cac.h>
 #include <armv7lib/vmsa/gen.h>
 #include <armv7lib/vmsa/tt.h>
 #include <armv7lib/vmsa/tlb.h>
-#include <armv7lib/cmsa/cac.h>
 
 #include <dbglib/gen.h>
 #include <dbglib/ser.h>
@@ -178,15 +179,12 @@ result_t mmu_paging_system_init(void) {
 	tt_virtual_address_t va;
 	tt_first_level_descriptor_t fld;
 	tt_second_level_descriptor_t sld;
-	gen_multiprocessor_affinity_register_t mpidr;
 	mmu_lookup_t **mt;
 	size_t *ms;
 	size_t i;
 	void *pointer[64];
 
 	DBG_LOG_FUNCTION(mmu_dbg, DBG_LEVEL_3);
-
-	mpidr = gen_get_mpidr();
 
 	ps = gen_add_base(&mmu_paging_system);
 
@@ -311,15 +309,12 @@ result_t mmu_paging_system_init(void) {
 			return FAILURE;
 		CHECK_END
 
-		sld.small_page.fields.b = TRUE;
-		sld.small_page.fields.c = TRUE;
+		CHECK_SUCCESS(mmu_set_small_page_attributes(&sld, MMU_MAP_NORMAL_MEMORY), "unable to set small page attributes", FAILURE, mmu_dbg, DBG_LEVEL_3)
+			return FAILURE;
+		CHECK_END
+
 		sld.small_page.fields.ap_0 = TT_AP_0_AP_1_F_S_RW_U_RW;
 		sld.small_page.fields.ap_1 = FALSE;
-
-		// if it is multicore then set the shareable bit
-		if(mpidr.fields.fmt == TRUE) {
-			sld.small_page.fields.s = TRUE;
-		}
 
 		DBG_LOG_STATEMENT("sld:", sld.all, mmu_dbg, DBG_LEVEL_3);
 
@@ -364,7 +359,7 @@ result_t mmu_paging_system_init(void) {
 	DBG_LOG_STATEMENT("(*ps)->ttbr1.all", (*ps)->ttbr1.all, mmu_dbg, DBG_LEVEL_2);
 	DBG_LOG_STATEMENT("(*ps)->ttbcr.all", (*ps)->ttbcr.all, mmu_dbg, DBG_LEVEL_2);
 
-	cac_flush_entire_data_cache();
+	cac_flush_entire_cache();
 
 	return SUCCESS;
 }
@@ -414,11 +409,21 @@ result_t mmu_switch_paging_system(size_t type) {
 		// some soc implementations of the armv7
 		// specification assume that ttbcr
 		// will be loaded before the ttbrs
+
+		gen_data_synchronization_barrier();
+
 		tt_set_ttbcr((*ps)->ttbcr);
+
+		gen_instruction_synchronization_barrier();
+
 		tt_set_ttbr1((*ps)->ttbr1);
 		tt_set_ttbr0((*ps)->ttbr0);
 
-		tlb_invalidate_entire_unified_tlb();
+		gen_instruction_synchronization_barrier();
+
+		tlb_invalidate_entire_tlb();
+
+		DBG_LOG_STATEMENT("switched the paging system", type, mmu_dbg, DBG_LEVEL_3);
 
 		memcpy((*ps), &tmp, sizeof(mmu_paging_system_t));
 	}
@@ -541,15 +546,12 @@ result_t mmu_map_internal_small_page(tt_physical_address_t pa, size_t options, t
 	tt_virtual_address_t l1, l2;
 	tt_first_level_descriptor_t fld;
 	tt_second_level_descriptor_t sld;
-	gen_multiprocessor_affinity_register_t mpidr;
 	tt_physical_address_t tmp_pa;
 	tt_virtual_address_t tmp_va;
 	tt_virtual_address_t cac_va;
 	size_t i, j;
 
 	DBG_LOG_FUNCTION(mmu_dbg, DBG_LEVEL_3);
-
-	mpidr = gen_get_mpidr();
 
 	// the page tables can only map 3 GB and above
 	// so set the va to 3GB to select the ttbr
@@ -623,7 +625,7 @@ result_t mmu_map_internal_small_page(tt_physical_address_t pa, size_t options, t
 
 			cac_va.all = (size_t)&(((tt_first_level_descriptor_t *)l1.all)[tmp_va.page_table.fields.l1_index]);
 
-			cac_clean_mva_to_poc_data_cache(cac_va);
+			cac_flush_cache_region(cac_va, sizeof(tt_first_level_descriptor_t));
 		}
 
 		if(tt_fld_is_page_table(fld) == TRUE) {
@@ -656,19 +658,15 @@ result_t mmu_map_internal_small_page(tt_physical_address_t pa, size_t options, t
 						return FAILURE;
 					CHECK_END
 
-					if(options & MMU_MAP_CACHEABLE) {
-						sld.small_page.fields.c = TRUE;
-					}
-					if(options & MMU_MAP_BUFFERABLE) {
-						sld.small_page.fields.b = TRUE;
-					}
+					CHECK_SUCCESS(mmu_set_small_page_attributes(&sld, options), "unable to sett small page attributes", FAILURE, mmu_dbg, DBG_LEVEL_2)
+						return FAILURE;
+					CHECK_END
 
 					sld.small_page.fields.ap_0 = TT_AP_0_AP_1_F_S_RW_U_RW;
 					sld.small_page.fields.ap_1 = FALSE;
 
-					// if it is multicore then set the shareable bit
-					if(mpidr.fields.fmt == TRUE) {
-						sld.small_page.fields.s = TRUE;
+					if(options & MMU_MAP_EXECUTE_NEVER) {
+						sld.small_page.fields.xn = TRUE;
 					}
 
 					CHECK_SUCCESS(tt_set_sld(tmp_va, l2, sld), "unable to set sld", va->all, mmu_dbg, DBG_LEVEL_2)
@@ -683,12 +681,15 @@ result_t mmu_map_internal_small_page(tt_physical_address_t pa, size_t options, t
 
 					cac_va.all = (size_t)&(((tt_second_level_descriptor_t *)l2.all)[va->page_table.fields.l2_index]);
 
-					cac_clean_mva_to_poc_data_cache(cac_va);
+					cac_flush_cache_region(cac_va, sizeof(tt_second_level_descriptor_t));
 
-					tlb_invalidate_mva_unified_tlb(*va);
+					tlb_invalidate_tlb_region(*va, TT_SMALL_PAGE_SIZE);
+
+					//cac_flush_cache_region(*va, TT_SMALL_PAGE_SIZE);
 
 					DBG_LOG_STATEMENT("tmp_va", tmp_va.all, mmu_dbg, DBG_LEVEL_3);
 					DBG_LOG_STATEMENT("found free space at va", va->all, mmu_dbg, DBG_LEVEL_3);
+					DBG_LOG_STATEMENT("found free space at sld", sld.all, mmu_dbg, DBG_LEVEL_3);
 
 					return SUCCESS;
 				}
@@ -709,15 +710,12 @@ result_t mmu_map_internal_section(tt_physical_address_t pa, size_t options, tt_v
 	tt_translation_table_base_control_register_t ttbcr;
 	tt_virtual_address_t l1;
 	tt_first_level_descriptor_t fld;
-	gen_multiprocessor_affinity_register_t mpidr;
 	tt_physical_address_t tmp_pa;
 	tt_virtual_address_t tmp_va;
 	tt_virtual_address_t cac_va;
 	size_t i;
 
 	DBG_LOG_FUNCTION(mmu_dbg, DBG_LEVEL_3);
-
-	mpidr = gen_get_mpidr();
 
 	// the page tables can only map 3 GB and above
 	// so set the va to 3GB to select the ttbr
@@ -775,19 +773,15 @@ result_t mmu_map_internal_section(tt_physical_address_t pa, size_t options, tt_v
 				return FAILURE;
 			CHECK_END
 
-			if(options & MMU_MAP_CACHEABLE) {
-				fld.section.fields.c = TRUE;
-			}
-			if(options & MMU_MAP_BUFFERABLE) {
-				fld.section.fields.b = TRUE;
-			}
+			CHECK_SUCCESS(mmu_set_section_attributes(&fld, options), "unable to sett small page attributes", FAILURE, mmu_dbg, DBG_LEVEL_2)
+				return FAILURE;
+			CHECK_END
 
 			fld.section.fields.ap_0 = TT_AP_0_AP_1_F_S_RW_U_RW;
 			fld.section.fields.ap_1 = FALSE;
 
-			// if it is multicore then set the shareable bit
-			if(mpidr.fields.fmt == TRUE) {
-				fld.section.fields.s = TRUE;
+			if(options & MMU_MAP_EXECUTE_NEVER) {
+				fld.section.fields.xn = TRUE;
 			}
 
 			CHECK_SUCCESS(tt_set_fld(tmp_va, l1, fld), "unable to set fld", va->all, mmu_dbg, DBG_LEVEL_2)
@@ -802,11 +796,14 @@ result_t mmu_map_internal_section(tt_physical_address_t pa, size_t options, tt_v
 
 			cac_va.all = (size_t)&(((tt_first_level_descriptor_t *)l1.all)[tmp_va.page_table.fields.l1_index]);
 
-			cac_clean_mva_to_poc_data_cache(cac_va);
+			cac_flush_cache_region(cac_va, sizeof(tt_first_level_descriptor_t));
 
-			tlb_invalidate_mva_unified_tlb(*va);
+			tlb_invalidate_tlb_region(*va, TT_SECTION_SIZE);
+
+			//cac_flush_cache_region(*va, TT_SECTION_SIZE);
 
 			DBG_LOG_STATEMENT("found free space at va", va->all, mmu_dbg, DBG_LEVEL_3);
+			DBG_LOG_STATEMENT("found free space at fld", fld.all, mmu_dbg, DBG_LEVEL_3);
 
 			return SUCCESS;
 		}
@@ -827,15 +824,12 @@ result_t mmu_map_external_small_page(tt_physical_address_t pa, size_t options, t
 	tt_virtual_address_t l2 = { .all = 0 };
 	tt_first_level_descriptor_t fld;
 	tt_second_level_descriptor_t sld;
-	gen_multiprocessor_affinity_register_t mpidr;
 	tt_physical_address_t tmp_pa;
 	tt_virtual_address_t tmp_va;
 	tt_virtual_address_t cac_va;
 	size_t i, j;
 
 	DBG_LOG_FUNCTION(mmu_dbg, DBG_LEVEL_3);
-
-	mpidr = gen_get_mpidr();
 
 	CHECK_SUCCESS(mmu_get_paging_system(MMU_SWITCH_EXTERNAL, &ps), "unable to get the external paging system", FAILURE, mmu_dbg, DBG_LEVEL_2)
 		return FAILURE;
@@ -849,7 +843,7 @@ result_t mmu_map_external_small_page(tt_physical_address_t pa, size_t options, t
 		return FAILURE;
 	CHECK_END
 
-	CHECK_SUCCESS(mmu_map_internal(tmp_pa, (TT_NUMBER_LEVEL_1_ENTRIES * sizeof(tt_first_level_descriptor_t)), MMU_MAP_CACHEABLE | MMU_MAP_BUFFERABLE, &l1), "unable to map pa", tmp_pa.all, mmu_dbg, DBG_LEVEL_2)
+	CHECK_SUCCESS(mmu_map_internal(tmp_pa, (TT_NUMBER_LEVEL_1_ENTRIES * sizeof(tt_first_level_descriptor_t)), MMU_MAP_NORMAL_MEMORY, &l1), "unable to map pa", tmp_pa.all, mmu_dbg, DBG_LEVEL_2)
 		return FAILURE;
 	CHECK_END
 
@@ -873,7 +867,7 @@ result_t mmu_map_external_small_page(tt_physical_address_t pa, size_t options, t
 				return FAILURE;
 			CHECK_END
 
-			CHECK_SUCCESS(mmu_map_internal(tmp_pa, (TT_NUMBER_LEVEL_2_ENTRIES * sizeof(tt_second_level_descriptor_t)), MMU_MAP_CACHEABLE | MMU_MAP_BUFFERABLE, &l2), "unable to map pa", tmp_pa.all, mmu_dbg, DBG_LEVEL_2)
+			CHECK_SUCCESS(mmu_map_internal(tmp_pa, (TT_NUMBER_LEVEL_2_ENTRIES * sizeof(tt_second_level_descriptor_t)), MMU_MAP_NORMAL_MEMORY, &l2), "unable to map pa", tmp_pa.all, mmu_dbg, DBG_LEVEL_2)
 				return FAILURE;
 			CHECK_END
 
@@ -893,19 +887,15 @@ result_t mmu_map_external_small_page(tt_physical_address_t pa, size_t options, t
 						return FAILURE;
 					CHECK_END
 
-					if(options & MMU_MAP_CACHEABLE) {
-						sld.small_page.fields.c = TRUE;
-					}
-					if(options & MMU_MAP_BUFFERABLE) {
-						sld.small_page.fields.b = TRUE;
-					}
+					CHECK_SUCCESS(mmu_set_small_page_attributes(&sld, options), "unable to sett small page attributes", FAILURE, mmu_dbg, DBG_LEVEL_2)
+						return FAILURE;
+					CHECK_END
 
 					sld.small_page.fields.ap_0 = TT_AP_0_AP_1_F_S_RW_U_RW;
 					sld.small_page.fields.ap_1 = FALSE;
 
-					// if it is multicore then set the shareable bit
-					if(mpidr.fields.fmt == TRUE) {
-						sld.small_page.fields.s = TRUE;
+					if(options & MMU_MAP_EXECUTE_NEVER) {
+						sld.small_page.fields.xn = TRUE;
 					}
 
 					CHECK_SUCCESS(tt_set_sld(tmp_va, l2, sld), "unable to set sld", va->all, mmu_dbg, DBG_LEVEL_2)
@@ -918,9 +908,11 @@ result_t mmu_map_external_small_page(tt_physical_address_t pa, size_t options, t
 
 					cac_va.all = (size_t)&(((tt_second_level_descriptor_t *)l2.all)[va->page_table.fields.l2_index]);
 
-					cac_clean_mva_to_poc_data_cache(cac_va);
+					cac_clean_mva_to_pou_data_cache(cac_va);
+					cac_invalidate_mva_to_poc_data_cache(cac_va);
 
 					DBG_LOG_STATEMENT("found free space at va", va->all, mmu_dbg, DBG_LEVEL_3);
+					DBG_LOG_STATEMENT("found free space at sld", sld.all, mmu_dbg, DBG_LEVEL_3);
 
 					CHECK_SUCCESS(mmu_unmap_internal(l2, (TT_NUMBER_LEVEL_2_ENTRIES * sizeof(tt_second_level_descriptor_t))), "unable to unmap 12", l2.all, mmu_dbg, DBG_LEVEL_2)
 						return FAILURE;
@@ -959,15 +951,12 @@ result_t mmu_map_external_section(tt_physical_address_t pa, size_t options, tt_v
 	tt_translation_table_base_register_t ttbr;
 	tt_virtual_address_t l1 = { .all = 0 };;
 	tt_first_level_descriptor_t fld;
-	gen_multiprocessor_affinity_register_t mpidr;
 	tt_physical_address_t tmp_pa;
 	tt_virtual_address_t tmp_va;
 	tt_virtual_address_t cac_va;
 	size_t i;
 
 	DBG_LOG_FUNCTION(mmu_dbg, DBG_LEVEL_3);
-
-	mpidr = gen_get_mpidr();
 
 	CHECK_SUCCESS(mmu_get_paging_system(MMU_SWITCH_EXTERNAL, &ps), "unable to get the external paging system", FAILURE, mmu_dbg, DBG_LEVEL_2)
 		return FAILURE;
@@ -983,7 +972,7 @@ result_t mmu_map_external_section(tt_physical_address_t pa, size_t options, tt_v
 
 	DBG_LOG_STATEMENT("tmp_pa", tmp_pa.all, mmu_dbg, DBG_LEVEL_3);
 
-	CHECK_SUCCESS(mmu_map_internal(tmp_pa, (TT_NUMBER_LEVEL_1_ENTRIES * sizeof(tt_first_level_descriptor_t)), MMU_MAP_CACHEABLE | MMU_MAP_BUFFERABLE, &l1), "unable to map pa", tmp_pa.all, mmu_dbg, DBG_LEVEL_2)
+	CHECK_SUCCESS(mmu_map_internal(tmp_pa, (TT_NUMBER_LEVEL_1_ENTRIES * sizeof(tt_first_level_descriptor_t)), MMU_MAP_NORMAL_MEMORY, &l1), "unable to map pa", tmp_pa.all, mmu_dbg, DBG_LEVEL_2)
 		return FAILURE;
 	CHECK_END
 
@@ -1007,19 +996,15 @@ result_t mmu_map_external_section(tt_physical_address_t pa, size_t options, tt_v
 				return FAILURE;
 			CHECK_END
 
-			if(options & MMU_MAP_CACHEABLE) {
-				fld.section.fields.c = TRUE;
-			}
-			if(options & MMU_MAP_BUFFERABLE) {
-				fld.section.fields.b = TRUE;
-			}
+			CHECK_SUCCESS(mmu_set_section_attributes(&fld, options), "unable to sett small page attributes", FAILURE, mmu_dbg, DBG_LEVEL_2)
+				return FAILURE;
+			CHECK_END
 
 			fld.section.fields.ap_0 = TT_AP_0_AP_1_F_S_RW_U_RW;
 			fld.section.fields.ap_1 = FALSE;
 
-			// if it is multicore then set the shareable bit
-			if(mpidr.fields.fmt == TRUE) {
-				fld.section.fields.s = TRUE;
+			if(options & MMU_MAP_EXECUTE_NEVER) {
+				fld.section.fields.xn = TRUE;
 			}
 
 			CHECK_SUCCESS(tt_set_fld(tmp_va, l1, fld), "unable to set fld", va->all, mmu_dbg, DBG_LEVEL_2)
@@ -1031,9 +1016,11 @@ result_t mmu_map_external_section(tt_physical_address_t pa, size_t options, tt_v
 
 			cac_va.all = (size_t)&(((tt_first_level_descriptor_t *)l1.all)[va->page_table.fields.l1_index]);
 
-			cac_clean_mva_to_poc_data_cache(cac_va);
+			cac_clean_mva_to_pou_data_cache(cac_va);
+			cac_invalidate_mva_to_poc_data_cache(cac_va);
 
 			DBG_LOG_STATEMENT("found free space at va", va->all, mmu_dbg, DBG_LEVEL_3);
+			DBG_LOG_STATEMENT("found free space at fld", fld.all, mmu_dbg, DBG_LEVEL_3);
 
 			return SUCCESS;
 		}
@@ -1204,7 +1191,8 @@ result_t mmu_unmap_internal_small_page(tt_virtual_address_t va) {
 
 	cac_va.all = (size_t)&(((tt_second_level_descriptor_t *)l2.all)[va.page_table.fields.l2_index]);
 
-	cac_clean_mva_to_poc_data_cache(cac_va);
+	cac_clean_mva_to_pou_data_cache(cac_va);
+	cac_invalidate_mva_to_poc_data_cache(cac_va);
 
 	tlb_invalidate_mva_unified_tlb(va);
 
@@ -1274,7 +1262,8 @@ result_t mmu_unmap_internal_section(tt_virtual_address_t va) {
 
 	cac_va.all = (size_t)&(((tt_first_level_descriptor_t *)l1.all)[va.page_table.fields.l1_index]);
 
-	cac_clean_mva_to_poc_data_cache(cac_va);
+	cac_clean_mva_to_pou_data_cache(cac_va);
+	cac_invalidate_mva_to_poc_data_cache(cac_va);
 
 	tlb_invalidate_mva_unified_tlb(va);
 
@@ -1309,7 +1298,7 @@ result_t mmu_unmap_external_small_page(tt_virtual_address_t va) {
 
 	DBG_LOG_STATEMENT("pa", pa.all, mmu_dbg, DBG_LEVEL_3);
 
-	CHECK_SUCCESS(mmu_map_internal(pa, (TT_NUMBER_LEVEL_1_ENTRIES * sizeof(tt_first_level_descriptor_t)), MMU_MAP_CACHEABLE | MMU_MAP_BUFFERABLE, &l1), "unable to map pa", pa.all, mmu_dbg, DBG_LEVEL_2)
+	CHECK_SUCCESS(mmu_map_internal(pa, (TT_NUMBER_LEVEL_1_ENTRIES * sizeof(tt_first_level_descriptor_t)), MMU_MAP_NORMAL_MEMORY, &l1), "unable to map pa", pa.all, mmu_dbg, DBG_LEVEL_2)
 		return FAILURE;
 	CHECK_END
 
@@ -1327,7 +1316,7 @@ result_t mmu_unmap_external_small_page(tt_virtual_address_t va) {
 		return FAILURE;
 	CHECK_END
 
-	CHECK_SUCCESS(mmu_map_internal(pa, (TT_NUMBER_LEVEL_2_ENTRIES * sizeof(tt_second_level_descriptor_t)), MMU_MAP_CACHEABLE | MMU_MAP_BUFFERABLE, &l2), "unable to map pa", pa.all, mmu_dbg, DBG_LEVEL_2)
+	CHECK_SUCCESS(mmu_map_internal(pa, (TT_NUMBER_LEVEL_2_ENTRIES * sizeof(tt_second_level_descriptor_t)), MMU_MAP_NORMAL_MEMORY, &l2), "unable to map pa", pa.all, mmu_dbg, DBG_LEVEL_2)
 		return FAILURE;
 	CHECK_END
 
@@ -1349,7 +1338,8 @@ result_t mmu_unmap_external_small_page(tt_virtual_address_t va) {
 
 	cac_va.all = (size_t)&(((tt_second_level_descriptor_t *)l2.all)[va.page_table.fields.l2_index]);
 
-	cac_clean_mva_to_poc_data_cache(cac_va);
+	cac_clean_mva_to_pou_data_cache(cac_va);
+	cac_invalidate_mva_to_poc_data_cache(cac_va);
 
 	CHECK_SUCCESS(mmu_unmap_internal(l2, (TT_NUMBER_LEVEL_2_ENTRIES * sizeof(tt_second_level_descriptor_t))), "unable to unmap 12", l2.all, mmu_dbg, DBG_LEVEL_2)
 		return FAILURE;
@@ -1388,7 +1378,7 @@ result_t mmu_unmap_external_section(tt_virtual_address_t va) {
 
 	DBG_LOG_STATEMENT("pa", pa.all, mmu_dbg, DBG_LEVEL_3);
 
-	CHECK_SUCCESS(mmu_map_internal(pa, (TT_NUMBER_LEVEL_1_ENTRIES * sizeof(tt_first_level_descriptor_t)), MMU_MAP_CACHEABLE | MMU_MAP_BUFFERABLE, &l1), "unable to map pa", pa.all, mmu_dbg, DBG_LEVEL_2)
+	CHECK_SUCCESS(mmu_map_internal(pa, (TT_NUMBER_LEVEL_1_ENTRIES * sizeof(tt_first_level_descriptor_t)), MMU_MAP_NORMAL_MEMORY, &l1), "unable to map pa", pa.all, mmu_dbg, DBG_LEVEL_2)
 		return FAILURE;
 	CHECK_END
 
@@ -1410,7 +1400,8 @@ result_t mmu_unmap_external_section(tt_virtual_address_t va) {
 
 	cac_va.all = (size_t)&(((tt_first_level_descriptor_t *)l1.all)[va.page_table.fields.l1_index]);
 
-	cac_clean_mva_to_poc_data_cache(cac_va);
+	cac_clean_mva_to_pou_data_cache(cac_va);
+	cac_invalidate_mva_to_poc_data_cache(cac_va);
 
 	CHECK_SUCCESS(mmu_unmap_internal(l1, (TT_NUMBER_LEVEL_1_ENTRIES * sizeof(tt_first_level_descriptor_t))), "unable to unmap 11", l1.all, mmu_dbg, DBG_LEVEL_2)
 		return FAILURE;
@@ -1419,6 +1410,316 @@ result_t mmu_unmap_external_section(tt_virtual_address_t va) {
 	return SUCCESS;
 }
 
+result_t mmu_get_strongly_ordered_attributes(gen_primary_region_remap_register_t prrr, size_t *tr, size_t *nos, size_t *ir, size_t *or, size_t *tex, size_t *c, size_t *b, size_t *s) {
+
+	size_t i;
+
+	DBG_LOG_FUNCTION(mmu_dbg, DBG_LEVEL_3);
+
+	for(i = 0; i < GEN_NUMBER_PRRR_ENTRIES; i++) {
+
+		// check to see if a region is normal memory, not outer sharable,
+		// the inner and outer regions are writeback, no write allocate
+		if(tr[i] == GEN_PRRR_SO) {
+
+			DBG_LOG_STATEMENT("i", i, mmu_dbg, DBG_LEVEL_3);
+			DBG_LOG_STATEMENT("tr", tr[i], mmu_dbg, DBG_LEVEL_3);
+			DBG_LOG_STATEMENT("nos", nos[i], mmu_dbg, DBG_LEVEL_3);
+
+			*tex = (i & 0x4) ? TRUE : FALSE;
+			*c = (i & 0x2) ? TRUE : FALSE;
+			*b = (i & 0x1) ? TRUE : FALSE;
+			*s = FALSE;
+
+			return SUCCESS;
+		}
+	}
+
+	return FAILURE;
+}
+
+result_t mmu_get_device_attributes(gen_primary_region_remap_register_t prrr, size_t *tr, size_t *nos, size_t *ir, size_t *or, size_t *tex, size_t *c, size_t *b, size_t *s) {
+
+	size_t i;
+
+	DBG_LOG_FUNCTION(mmu_dbg, DBG_LEVEL_3);
+
+	// set the region to sharable
+
+	if(prrr.fields.ds0 == TRUE) {
+		*s = FALSE;
+	}
+	else if(prrr.fields.ds1 == TRUE) {
+		*s = TRUE;
+	}
+	else {
+		DBG_LOG_STATEMENT("unable to set memory to sharable", FAILURE, mmu_dbg, DBG_LEVEL_3);
+		return FAILURE;
+	}
+
+	for(i = 0; i < GEN_NUMBER_PRRR_ENTRIES; i++) {
+
+		// check to see if the regions are normal memory and not outer sharable
+		// check to see if the inner and outer regions are writeback, no write allocate
+		if(tr[i] == GEN_PRRR_D) {
+
+			DBG_LOG_STATEMENT("i", i, mmu_dbg, DBG_LEVEL_3);
+			DBG_LOG_STATEMENT("tr", tr[i], mmu_dbg, DBG_LEVEL_3);
+			DBG_LOG_STATEMENT("nos", nos[i], mmu_dbg, DBG_LEVEL_3);
+
+			*tex = (i & 0x4) ? TRUE : FALSE;
+			*c = (i & 0x2) ? TRUE : FALSE;
+			*b = (i & 0x1) ? TRUE : FALSE;
+
+			return SUCCESS;
+		}
+	}
+
+	return FAILURE;
+}
+
+result_t mmu_get_normal_memory_attributes(gen_primary_region_remap_register_t prrr, size_t *tr, size_t *nos, size_t *ir, size_t *or, size_t *tex, size_t *c, size_t *b, size_t *s) {
+
+	size_t i;
+
+	DBG_LOG_FUNCTION(mmu_dbg, DBG_LEVEL_3);
+
+	// set the region to sharable
+	if(prrr.fields.ns0 == TRUE) {
+		*s = FALSE;
+	}
+	else if(prrr.fields.ns1 == TRUE) {
+		*s = TRUE;
+	}
+	else {
+		DBG_LOG_STATEMENT("unable to set memory to sharable", FAILURE, mmu_dbg, DBG_LEVEL_3);
+		return FAILURE;
+	}
+
+	for(i = 0; i < GEN_NUMBER_PRRR_ENTRIES; i++) {
+
+		// check to see if the regions are normal memory and not outer sharable
+		// check to see if the inner and outer regions are writeback, no write allocate
+		if((tr[i] == GEN_PRRR_NM) && (nos[i] == TRUE) && (ir[i] == GEN_NMRR_WB_NO_WA) && (or[i] == GEN_NMRR_WB_NO_WA)) {
+
+			DBG_LOG_STATEMENT("i", i, mmu_dbg, DBG_LEVEL_3);
+			DBG_LOG_STATEMENT("tr", tr[i], mmu_dbg, DBG_LEVEL_3);
+			DBG_LOG_STATEMENT("nos", nos[i], mmu_dbg, DBG_LEVEL_3);
+			DBG_LOG_STATEMENT("ir", ir[i], mmu_dbg, DBG_LEVEL_3);
+			DBG_LOG_STATEMENT("or", or[i], mmu_dbg, DBG_LEVEL_3);
+
+			*tex = (i & 0x4) ? TRUE : FALSE;
+			*c = (i & 0x2) ? TRUE : FALSE;
+			*b = (i & 0x1) ? TRUE : FALSE;
+
+			return SUCCESS;
+		}
+	}
+
+	return FAILURE;
+}
+
+result_t mmu_set_section_attributes(tt_first_level_descriptor_t *fld, size_t options) {
+
+	gen_system_control_register_t sctlr;
+	gen_primary_region_remap_register_t prrr;
+	gen_normal_memory_remap_register_t nmrr;
+	size_t tr[GEN_NUMBER_PRRR_ENTRIES];
+	size_t nos[GEN_NUMBER_PRRR_ENTRIES];
+	size_t ir[GEN_NUMBER_NMRR_ENTRIES];
+	size_t or[GEN_NUMBER_NMRR_ENTRIES];
+	size_t tex, c, b, s;
+
+	DBG_LOG_FUNCTION(mmu_dbg, DBG_LEVEL_3);
+
+	sctlr = gen_get_sctlr();
+
+	if(sctlr.fields.tre == TRUE) {
+
+		// Only care about 3 types of memory, any region that can
+		// be sharable will be sharable
+		// Both cacheable/bufferable (completely)
+		// Only cachebale (completely)
+		// Only bufferable (completely)
+		// Neither cacheable/bufferable
+
+		prrr = gen_get_prrr();
+
+		tr[0] = prrr.fields.tr0; nos[0] = prrr.fields.nos0;
+		tr[1] = prrr.fields.tr1; nos[1] = prrr.fields.nos1;
+		tr[2] = prrr.fields.tr2; nos[2] = prrr.fields.nos2;
+		tr[3] = prrr.fields.tr3; nos[3] = prrr.fields.nos3;
+		tr[4] = prrr.fields.tr4; nos[4] = prrr.fields.nos4;
+		tr[5] = prrr.fields.tr5; nos[5] = prrr.fields.nos5;
+		tr[6] = prrr.fields.tr6; nos[6] = prrr.fields.nos6;
+		tr[7] = prrr.fields.tr7; nos[7] = prrr.fields.nos7;
+
+		nmrr = gen_get_nmrr();
+
+		ir[0] = nmrr.fields.ir0; or[0] = nmrr.fields.or0;
+		ir[1] = nmrr.fields.ir1; or[1] = nmrr.fields.or1;
+		ir[2] = nmrr.fields.ir2; or[2] = nmrr.fields.or2;
+		ir[3] = nmrr.fields.ir3; or[3] = nmrr.fields.or3;
+		ir[4] = nmrr.fields.ir4; or[4] = nmrr.fields.or4;
+		ir[5] = nmrr.fields.ir5; or[5] = nmrr.fields.or5;
+		ir[6] = nmrr.fields.ir6; or[6] = nmrr.fields.or6;
+		ir[7] = nmrr.fields.ir7; or[7] = nmrr.fields.or7;
+
+		if(options & MMU_MAP_NORMAL_MEMORY) {
+			CHECK_SUCCESS(mmu_get_normal_memory_attributes(prrr, tr, nos, ir, or, &tex, &c, &b, &s), "unable to get normal memory attributes", FAILURE, mmu_dbg, DBG_LEVEL_3)
+				return FAILURE;
+			CHECK_END
+		}
+		else if(options & MMU_MAP_DEVICE_MEMORY) {
+			CHECK_SUCCESS(mmu_get_device_attributes(prrr, tr, nos, ir, or, &tex, &c, &b, &s), "unable to get normal memory attributes", FAILURE, mmu_dbg, DBG_LEVEL_3)
+				return FAILURE;
+			CHECK_END
+		}
+		else if(options & MMU_MAP_STRONGLY_ORDERED_MEMORY) {
+			CHECK_SUCCESS(mmu_get_strongly_ordered_attributes(prrr, tr, nos, ir, or, &tex, &c, &b, &s), "unable to get normal memory attributes", FAILURE, mmu_dbg, DBG_LEVEL_3)
+				return FAILURE;
+			CHECK_END
+		}
+		else {
+			DBG_LOG_STATEMENT("unsupported memory options", options, mmu_dbg, DBG_LEVEL_3);
+			return FAILURE;
+		}
+
+		DBG_LOG_STATEMENT("tex", tex, mmu_dbg, DBG_LEVEL_3);
+		DBG_LOG_STATEMENT("c", c, mmu_dbg, DBG_LEVEL_3);
+		DBG_LOG_STATEMENT("b", b, mmu_dbg, DBG_LEVEL_3);
+		DBG_LOG_STATEMENT("s", s, mmu_dbg, DBG_LEVEL_3);
+
+		fld->section.fields.tex = tex;
+		fld->section.fields.c = c;
+		fld->section.fields.b = b;
+		fld->section.fields.s = s;
+	}
+	else {
+
+		fld->section.fields.tex = 0;
+		fld->section.fields.s = TRUE;
+
+		// Outer and Inner Write-Back, no Write-Allocate
+		if(options & MMU_MAP_NORMAL_MEMORY) {
+			fld->section.fields.b = TRUE;
+			fld->section.fields.c = TRUE;
+		}
+		// Shareable Device
+		else if(options & MMU_MAP_DEVICE_MEMORY) {
+			fld->section.fields.b = TRUE;
+			fld->section.fields.c = FALSE;
+		}
+		// Strongly-ordered
+		else if(options & MMU_MAP_STRONGLY_ORDERED_MEMORY) {
+			fld->section.fields.b = FALSE;
+			fld->section.fields.c = FALSE;
+		}
+	}
+
+	return SUCCESS;
+}
+
+result_t mmu_set_small_page_attributes(tt_second_level_descriptor_t *sld, size_t options) {
+
+	gen_system_control_register_t sctlr;
+	gen_primary_region_remap_register_t prrr;
+	gen_normal_memory_remap_register_t nmrr;
+	size_t tr[GEN_NUMBER_PRRR_ENTRIES];
+	size_t nos[GEN_NUMBER_PRRR_ENTRIES];
+	size_t ir[GEN_NUMBER_NMRR_ENTRIES];
+	size_t or[GEN_NUMBER_NMRR_ENTRIES];
+	size_t tex, c, b, s;
+
+	DBG_LOG_FUNCTION(mmu_dbg, DBG_LEVEL_3);
+
+	sctlr = gen_get_sctlr();
+
+	if(sctlr.fields.tre == TRUE) {
+
+		// Only care about 3 types of memory, any region that can
+		// be sharable will be sharable
+		// Both cacheable/bufferable (completely)
+		// Only cachebale (completely)
+		// Only bufferable (completely)
+		// Neither cacheable/bufferable
+
+		prrr = gen_get_prrr();
+
+		tr[0] = prrr.fields.tr0; nos[0] = prrr.fields.nos0;
+		tr[1] = prrr.fields.tr1; nos[1] = prrr.fields.nos1;
+		tr[2] = prrr.fields.tr2; nos[2] = prrr.fields.nos2;
+		tr[3] = prrr.fields.tr3; nos[3] = prrr.fields.nos3;
+		tr[4] = prrr.fields.tr4; nos[4] = prrr.fields.nos4;
+		tr[5] = prrr.fields.tr5; nos[5] = prrr.fields.nos5;
+		tr[6] = prrr.fields.tr6; nos[6] = prrr.fields.nos6;
+		tr[7] = prrr.fields.tr7; nos[7] = prrr.fields.nos7;
+
+		nmrr = gen_get_nmrr();
+
+		ir[0] = nmrr.fields.ir0; or[0] = nmrr.fields.or0;
+		ir[1] = nmrr.fields.ir1; or[1] = nmrr.fields.or1;
+		ir[2] = nmrr.fields.ir2; or[2] = nmrr.fields.or2;
+		ir[3] = nmrr.fields.ir3; or[3] = nmrr.fields.or3;
+		ir[4] = nmrr.fields.ir4; or[4] = nmrr.fields.or4;
+		ir[5] = nmrr.fields.ir5; or[5] = nmrr.fields.or5;
+		ir[6] = nmrr.fields.ir6; or[6] = nmrr.fields.or6;
+		ir[7] = nmrr.fields.ir7; or[7] = nmrr.fields.or7;
+
+		if(options & MMU_MAP_NORMAL_MEMORY) {
+			CHECK_SUCCESS(mmu_get_normal_memory_attributes(prrr, tr, nos, ir, or, &tex, &c, &b, &s), "unable to get normal memory attributes", FAILURE, mmu_dbg, DBG_LEVEL_3)
+				return FAILURE;
+			CHECK_END
+		}
+		else if(options & MMU_MAP_DEVICE_MEMORY) {
+			CHECK_SUCCESS(mmu_get_device_attributes(prrr, tr, nos, ir, or, &tex, &c, &b, &s), "unable to get normal memory attributes", FAILURE, mmu_dbg, DBG_LEVEL_3)
+				return FAILURE;
+			CHECK_END
+		}
+		else if(options & MMU_MAP_STRONGLY_ORDERED_MEMORY) {
+			CHECK_SUCCESS(mmu_get_strongly_ordered_attributes(prrr, tr, nos, ir, or, &tex, &c, &b, &s), "unable to get normal memory attributes", FAILURE, mmu_dbg, DBG_LEVEL_3)
+				return FAILURE;
+			CHECK_END
+		}
+		else {
+			DBG_LOG_STATEMENT("unsupported memory options", options, mmu_dbg, DBG_LEVEL_3);
+			return FAILURE;
+		}
+
+		DBG_LOG_STATEMENT("tex", tex, mmu_dbg, DBG_LEVEL_3);
+		DBG_LOG_STATEMENT("c", c, mmu_dbg, DBG_LEVEL_3);
+		DBG_LOG_STATEMENT("b", b, mmu_dbg, DBG_LEVEL_3);
+		DBG_LOG_STATEMENT("s", s, mmu_dbg, DBG_LEVEL_3);
+
+		sld->small_page.fields.tex = tex;
+		sld->small_page.fields.c = c;
+		sld->small_page.fields.b = b;
+		sld->small_page.fields.s = s;
+	}
+	else {
+
+		sld->small_page.fields.tex = 0;
+		sld->small_page.fields.s = TRUE;
+
+		// Outer and Inner Write-Back, no Write-Allocate
+		if(options & MMU_MAP_NORMAL_MEMORY) {
+			sld->small_page.fields.b = TRUE;
+			sld->small_page.fields.c = TRUE;
+		}
+		// Shareable Device
+		else if(options & MMU_MAP_DEVICE_MEMORY) {
+			sld->small_page.fields.b = TRUE;
+			sld->small_page.fields.c = FALSE;
+		}
+		// Strongly-ordered
+		else if(options & MMU_MAP_STRONGLY_ORDERED_MEMORY) {
+			sld->small_page.fields.b = FALSE;
+			sld->small_page.fields.c = FALSE;
+		}
+	}
+
+	return SUCCESS;
+}
 
 result_t mmu_get_debug_level(size_t *level) {
 

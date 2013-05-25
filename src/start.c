@@ -49,7 +49,7 @@
 #include <stdlib/check.h>
 #include <stdlib/string.h>
 
-DBG_DEFINE_VARIABLE(start_dbg, DBG_LEVEL_2);
+DBG_DEFINE_VARIABLE(start_dbg, DBG_LEVEL_3);
 
 result_t start_c() {
 
@@ -59,7 +59,6 @@ result_t start_c() {
 	size_t mas_size;
 	void *org_sp = NULL;
 	void *cur_sp = NULL;
-	result_t result;
 
 	//-------------------------//
 	//      START BRING UP     //
@@ -151,7 +150,7 @@ result_t start_c() {
 	//      END BRING UP     //
 	//-----------------------//
 
-	result = start_run();
+	start_run();
 
 	//--------------------------//
 	//     START TEAR DOWN      //
@@ -193,7 +192,7 @@ result_t start_c() {
 	//     END TEST AREA      //
 	//------------------------//
 
-	return result;
+	return SUCCESS;
 }
 
 result_t start_run(void) {
@@ -218,7 +217,7 @@ result_t start_run(void) {
 
 	va.all = (size_t)ser_get_virtual_address();
 
-	CHECK_SUCCESS(mmu_map(pa, ser_get_size(), MMU_MAP_INTERNAL, &va), "unable to map pa", pa.all, start_dbg, DBG_LEVEL_2)
+	CHECK_SUCCESS(mmu_map(pa, ser_get_size(), MMU_MAP_INTERNAL | MMU_MAP_DEVICE_MEMORY, &va), "unable to map pa", va.all, start_dbg, DBG_LEVEL_2)
 		return FAILURE;
 	CHECK_END
 
@@ -230,7 +229,6 @@ result_t start_run(void) {
 	CHECK_SUCCESS(ser_init((void *)va.all), "[-] unable to initialize the serial port", FAILURE, start_dbg, DBG_LEVEL_2)
 		return FAILURE;
 	CHECK_END
-
 
 	DBG_LOG_STATEMENT("[%] serial port initialized", SUCCESS, start_dbg, DBG_LEVEL_2);
 
