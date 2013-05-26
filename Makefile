@@ -20,7 +20,7 @@ SRCFILES += mas.c
 SRCFILES += mmu.c
 SRCFILES += vec.S vec.c
 SRCFILES += log.c
-SRCFILES += ldr.S ldr.c
+SRCFILES += ldr.c
 SRCFILES += lst.c
 SRCFILES += end.S
 

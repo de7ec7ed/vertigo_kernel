@@ -548,7 +548,6 @@ result_t mmu_map_internal_small_page(tt_physical_address_t pa, size_t options, t
 	tt_second_level_descriptor_t sld;
 	tt_physical_address_t tmp_pa;
 	tt_virtual_address_t tmp_va;
-	tt_virtual_address_t cac_va;
 	size_t i, j;
 
 	DBG_LOG_FUNCTION(mmu_dbg, DBG_LEVEL_3);
@@ -623,9 +622,7 @@ result_t mmu_map_internal_small_page(tt_physical_address_t pa, size_t options, t
 				return FAILURE;
 			CHECK_END
 
-			cac_va.all = (size_t)&(((tt_first_level_descriptor_t *)l1.all)[tmp_va.page_table.fields.l1_index]);
-
-			cac_flush_cache_region(cac_va, sizeof(tt_first_level_descriptor_t));
+			cac_flush_cache_region(&(((tt_first_level_descriptor_t *)l1.all)[tmp_va.page_table.fields.l1_index]), sizeof(tt_first_level_descriptor_t));
 		}
 
 		if(tt_fld_is_page_table(fld) == TRUE) {
@@ -679,13 +676,9 @@ result_t mmu_map_internal_small_page(tt_physical_address_t pa, size_t options, t
 					// compensate for the 1/4 size l1
 					va->page_table.fields.l1_index += ((FOUR_KILOBYTES * 3) / sizeof(tt_first_level_descriptor_t));
 
-					cac_va.all = (size_t)&(((tt_second_level_descriptor_t *)l2.all)[va->page_table.fields.l2_index]);
+					cac_flush_cache_region(&(((tt_second_level_descriptor_t *)l2.all)[va->page_table.fields.l2_index]), sizeof(tt_second_level_descriptor_t));
 
-					cac_flush_cache_region(cac_va, sizeof(tt_second_level_descriptor_t));
-
-					tlb_invalidate_tlb_region(*va, TT_SMALL_PAGE_SIZE);
-
-					//cac_flush_cache_region(*va, TT_SMALL_PAGE_SIZE);
+					tlb_invalidate_tlb_region((void *)(va->all), TT_SMALL_PAGE_SIZE);
 
 					DBG_LOG_STATEMENT("tmp_va", tmp_va.all, mmu_dbg, DBG_LEVEL_3);
 					DBG_LOG_STATEMENT("found free space at va", va->all, mmu_dbg, DBG_LEVEL_3);
@@ -712,7 +705,6 @@ result_t mmu_map_internal_section(tt_physical_address_t pa, size_t options, tt_v
 	tt_first_level_descriptor_t fld;
 	tt_physical_address_t tmp_pa;
 	tt_virtual_address_t tmp_va;
-	tt_virtual_address_t cac_va;
 	size_t i;
 
 	DBG_LOG_FUNCTION(mmu_dbg, DBG_LEVEL_3);
@@ -794,13 +786,9 @@ result_t mmu_map_internal_section(tt_physical_address_t pa, size_t options, tt_v
 			// compensate for the 1/4 size l1
 			va->page_table.fields.l1_index += ((FOUR_KILOBYTES * 3) / sizeof(tt_first_level_descriptor_t));
 
-			cac_va.all = (size_t)&(((tt_first_level_descriptor_t *)l1.all)[tmp_va.page_table.fields.l1_index]);
+			cac_flush_cache_region(&(((tt_first_level_descriptor_t *)l1.all)[tmp_va.page_table.fields.l1_index]), sizeof(tt_first_level_descriptor_t));
 
-			cac_flush_cache_region(cac_va, sizeof(tt_first_level_descriptor_t));
-
-			tlb_invalidate_tlb_region(*va, TT_SECTION_SIZE);
-
-			//cac_flush_cache_region(*va, TT_SECTION_SIZE);
+			tlb_invalidate_tlb_region((void *)(va->all), TT_SECTION_SIZE);
 
 			DBG_LOG_STATEMENT("found free space at va", va->all, mmu_dbg, DBG_LEVEL_3);
 			DBG_LOG_STATEMENT("found free space at fld", fld.all, mmu_dbg, DBG_LEVEL_3);
@@ -826,7 +814,6 @@ result_t mmu_map_external_small_page(tt_physical_address_t pa, size_t options, t
 	tt_second_level_descriptor_t sld;
 	tt_physical_address_t tmp_pa;
 	tt_virtual_address_t tmp_va;
-	tt_virtual_address_t cac_va;
 	size_t i, j;
 
 	DBG_LOG_FUNCTION(mmu_dbg, DBG_LEVEL_3);
@@ -906,10 +893,9 @@ result_t mmu_map_external_small_page(tt_physical_address_t pa, size_t options, t
 					va->page_table.fields.l2_index += j;
 					va->small_page.fields.offset = pa.small_page.fields.offset;
 
-					cac_va.all = (size_t)&(((tt_second_level_descriptor_t *)l2.all)[va->page_table.fields.l2_index]);
+					cac_flush_cache_region(&(((tt_second_level_descriptor_t *)l2.all)[va->page_table.fields.l2_index]), sizeof(tt_second_level_descriptor_t));
 
-					cac_clean_mva_to_pou_data_cache(cac_va);
-					cac_invalidate_mva_to_poc_data_cache(cac_va);
+					tlb_invalidate_tlb_region((void *)(va->all), TT_SMALL_PAGE_SIZE);
 
 					DBG_LOG_STATEMENT("found free space at va", va->all, mmu_dbg, DBG_LEVEL_3);
 					DBG_LOG_STATEMENT("found free space at sld", sld.all, mmu_dbg, DBG_LEVEL_3);
@@ -953,7 +939,6 @@ result_t mmu_map_external_section(tt_physical_address_t pa, size_t options, tt_v
 	tt_first_level_descriptor_t fld;
 	tt_physical_address_t tmp_pa;
 	tt_virtual_address_t tmp_va;
-	tt_virtual_address_t cac_va;
 	size_t i;
 
 	DBG_LOG_FUNCTION(mmu_dbg, DBG_LEVEL_3);
@@ -1014,10 +999,9 @@ result_t mmu_map_external_section(tt_physical_address_t pa, size_t options, tt_v
 			va->page_table.fields.l1_index += i;
 			va->section.fields.offset = pa.section.fields.offset;
 
-			cac_va.all = (size_t)&(((tt_first_level_descriptor_t *)l1.all)[va->page_table.fields.l1_index]);
+			cac_flush_cache_region(&(((tt_first_level_descriptor_t *)l1.all)[va->page_table.fields.l1_index]), sizeof(tt_first_level_descriptor_t));
 
-			cac_clean_mva_to_pou_data_cache(cac_va);
-			cac_invalidate_mva_to_poc_data_cache(cac_va);
+			tlb_invalidate_tlb_region((void *)(va->all), TT_SECTION_SIZE);
 
 			DBG_LOG_STATEMENT("found free space at va", va->all, mmu_dbg, DBG_LEVEL_3);
 			DBG_LOG_STATEMENT("found free space at fld", fld.all, mmu_dbg, DBG_LEVEL_3);
@@ -1119,7 +1103,6 @@ result_t mmu_unmap_internal_small_page(tt_virtual_address_t va) {
 	tt_second_level_descriptor_t sld;
 	tt_physical_address_t pa;
 	tt_virtual_address_t tmp_va;
-	tt_virtual_address_t cac_va;
 
 	DBG_LOG_FUNCTION(mmu_dbg, DBG_LEVEL_3);
 
@@ -1189,12 +1172,10 @@ result_t mmu_unmap_internal_small_page(tt_virtual_address_t va) {
 		return FAILURE;
 	CHECK_END
 
-	cac_va.all = (size_t)&(((tt_second_level_descriptor_t *)l2.all)[va.page_table.fields.l2_index]);
+	tlb_invalidate_tlb_region((void *)(va.all), TT_SMALL_PAGE_SIZE);
 
-	cac_clean_mva_to_pou_data_cache(cac_va);
-	cac_invalidate_mva_to_poc_data_cache(cac_va);
+	cac_flush_cache_region(&(((tt_second_level_descriptor_t *)l2.all)[va.page_table.fields.l2_index]), sizeof(tt_second_level_descriptor_t));
 
-	tlb_invalidate_mva_unified_tlb(va);
 
 	return SUCCESS;
 }
@@ -1208,7 +1189,6 @@ result_t mmu_unmap_internal_section(tt_virtual_address_t va) {
 	tt_first_level_descriptor_t fld;
 	tt_physical_address_t pa;
 	tt_virtual_address_t tmp_va;
-	tt_virtual_address_t cac_va;
 
 	DBG_LOG_FUNCTION(mmu_dbg, DBG_LEVEL_3);
 
@@ -1260,12 +1240,9 @@ result_t mmu_unmap_internal_section(tt_virtual_address_t va) {
 		return FAILURE;
 	CHECK_END
 
-	cac_va.all = (size_t)&(((tt_first_level_descriptor_t *)l1.all)[va.page_table.fields.l1_index]);
+	tlb_invalidate_tlb_region((void *)(va.all), TT_SECTION_SIZE);
 
-	cac_clean_mva_to_pou_data_cache(cac_va);
-	cac_invalidate_mva_to_poc_data_cache(cac_va);
-
-	tlb_invalidate_mva_unified_tlb(va);
+	cac_flush_cache_region(&(((tt_first_level_descriptor_t *)l1.all)[va.page_table.fields.l1_index]), sizeof(tt_first_level_descriptor_t));
 
 	return SUCCESS;
 }
@@ -1280,7 +1257,6 @@ result_t mmu_unmap_external_small_page(tt_virtual_address_t va) {
 	tt_first_level_descriptor_t fld;
 	tt_second_level_descriptor_t sld;
 	tt_physical_address_t pa;
-	tt_virtual_address_t cac_va;
 
 	DBG_LOG_FUNCTION(mmu_dbg, DBG_LEVEL_3);
 
@@ -1336,10 +1312,9 @@ result_t mmu_unmap_external_small_page(tt_virtual_address_t va) {
 		return FAILURE;
 	CHECK_END
 
-	cac_va.all = (size_t)&(((tt_second_level_descriptor_t *)l2.all)[va.page_table.fields.l2_index]);
+	tlb_invalidate_tlb_region((void *)(va.all), TT_SMALL_PAGE_SIZE);
 
-	cac_clean_mva_to_pou_data_cache(cac_va);
-	cac_invalidate_mva_to_poc_data_cache(cac_va);
+	cac_flush_cache_region(&(((tt_second_level_descriptor_t *)l2.all)[va.page_table.fields.l2_index]), sizeof(tt_second_level_descriptor_t));
 
 	CHECK_SUCCESS(mmu_unmap_internal(l2, (TT_NUMBER_LEVEL_2_ENTRIES * sizeof(tt_second_level_descriptor_t))), "unable to unmap 12", l2.all, mmu_dbg, DBG_LEVEL_2)
 		return FAILURE;
@@ -1360,7 +1335,6 @@ result_t mmu_unmap_external_section(tt_virtual_address_t va) {
 	tt_virtual_address_t l1 = { .all = 0 };
 	tt_first_level_descriptor_t fld;
 	tt_physical_address_t pa;
-	tt_virtual_address_t cac_va;
 
 	DBG_LOG_FUNCTION(mmu_dbg, DBG_LEVEL_3);
 
@@ -1398,10 +1372,9 @@ result_t mmu_unmap_external_section(tt_virtual_address_t va) {
 		return FAILURE;
 	CHECK_END
 
-	cac_va.all = (size_t)&(((tt_first_level_descriptor_t *)l1.all)[va.page_table.fields.l1_index]);
+	tlb_invalidate_tlb_region((void *)(va.all), TT_SECTION_SIZE);
 
-	cac_clean_mva_to_pou_data_cache(cac_va);
-	cac_invalidate_mva_to_poc_data_cache(cac_va);
+	cac_flush_cache_region(&(((tt_first_level_descriptor_t *)l1.all)[va.page_table.fields.l1_index]), sizeof(tt_first_level_descriptor_t));
 
 	CHECK_SUCCESS(mmu_unmap_internal(l1, (TT_NUMBER_LEVEL_1_ENTRIES * sizeof(tt_first_level_descriptor_t))), "unable to unmap 11", l1.all, mmu_dbg, DBG_LEVEL_2)
 		return FAILURE;

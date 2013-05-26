@@ -44,12 +44,12 @@ import_functions:
 
 // sys_export_header
 export_header:
-VARIABLE(export_functions_size) .word 138
+VARIABLE(export_functions_size) .word 141
 VARIABLE(export_functions_address) .word export_functions
 
 export_functions:
 
-// armv7lib 63
+// armv7lib 66
 GEN_EXPORT_FUNCTION cpuid_get_midr
 GEN_EXPORT_FUNCTION gen_get_sp
 GEN_EXPORT_FUNCTION gen_set_sp
@@ -77,8 +77,8 @@ GEN_EXPORT_FUNCTION gen_user_write_translation
 GEN_EXPORT_FUNCTION gen_get_sctlr
 GEN_EXPORT_FUNCTION gen_set_sctlr
 GEN_EXPORT_FUNCTION tlb_get_tlbtr
-GEN_EXPORT_FUNCTION tlb_invalidate_entire_unified_tlb
-GEN_EXPORT_FUNCTION tlb_invalidate_mva_unified_tlb
+GEN_EXPORT_FUNCTION tlb_invalidate_entire_tlb
+GEN_EXPORT_FUNCTION tlb_invalidate_tlb_region
 GEN_EXPORT_FUNCTION tt_get_fld
 GEN_EXPORT_FUNCTION tt_set_fld
 GEN_EXPORT_FUNCTION tt_get_sld
@@ -108,10 +108,13 @@ GEN_EXPORT_FUNCTION cac_get_csselr
 GEN_EXPORT_FUNCTION cac_set_csselr
 GEN_EXPORT_FUNCTION cac_get_clidr
 GEN_EXPORT_FUNCTION cac_get_ccsidr
-GEN_EXPORT_FUNCTION cac_invalidate_mva_to_pou_instruction_cache
-GEN_EXPORT_FUNCTION cac_flush_entire_instruction_cache
-GEN_EXPORT_FUNCTION cac_clean_mva_to_poc_data_cache
-GEN_EXPORT_FUNCTION cac_flush_mva_to_poc_data_cache
+GEN_EXPORT_FUNCTION cac_flush_cache_region
+GEN_EXPORT_FUNCTION cac_flush_entire_cache
+GEN_EXPORT_FUNCTION cac_clean_data_cache_region
+GEN_EXPORT_FUNCTION cac_invalidate_data_cache_region
+GEN_EXPORT_FUNCTION cac_invalidate_instruction_cache_region
+GEN_EXPORT_FUNCTION cac_invalidate_cache_region
+GEN_EXPORT_FUNCTION cac_clean_cache_region
 GEN_EXPORT_FUNCTION cac_flush_entire_data_cache
 
 // dbglib 12

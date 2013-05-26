@@ -130,6 +130,8 @@ result_t ldr_call_handler(call_handler_t *handler, void *data, gen_general_purpo
 			return SUCCESS;
 		CHECK_END
 
+		cac_flush_cache_region(buffer, size);
+
 		CHECK_SUCCESS(ldr_init_module(buffer, argc, argv), "failed to initialize the module", buffer, ldr_dbg, DBG_LEVEL_2)
 			for(i = 0; i < argc; i++) {
 				free(argv[i]);
