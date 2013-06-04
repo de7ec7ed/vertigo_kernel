@@ -44,7 +44,7 @@ import_functions:
 
 // sys_export_header
 export_header:
-VARIABLE(export_functions_size) .word 141
+VARIABLE(export_functions_size) .word 139
 VARIABLE(export_functions_address) .word export_functions
 
 export_functions:
@@ -117,7 +117,7 @@ GEN_EXPORT_FUNCTION cac_invalidate_cache_region
 GEN_EXPORT_FUNCTION cac_clean_cache_region
 GEN_EXPORT_FUNCTION cac_flush_entire_data_cache
 
-// dbglib 12
+// dbglib 10
 GEN_EXPORT_FUNCTION mem_init
 GEN_EXPORT_FUNCTION mem_fini
 GEN_EXPORT_FUNCTION mem_putc
@@ -127,8 +127,6 @@ GEN_EXPORT_FUNCTION ser_init
 GEN_EXPORT_FUNCTION ser_fini
 GEN_EXPORT_FUNCTION ser_putc
 GEN_EXPORT_FUNCTION ser_write
-GEN_EXPORT_FUNCTION ser_getc
-GEN_EXPORT_FUNCTION ser_read
 GEN_EXPORT_FUNCTION ser_print
 
 // stdlib 14

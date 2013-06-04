@@ -1471,15 +1471,15 @@ result_t mmu_get_normal_memory_attributes(gen_primary_region_remap_register_t pr
 
 	for(i = 0; i < GEN_NUMBER_PRRR_ENTRIES; i++) {
 
+		DBG_LOG_STATEMENT("i", i, mmu_dbg, DBG_LEVEL_3);
+		DBG_LOG_STATEMENT("tr", tr[i], mmu_dbg, DBG_LEVEL_3);
+		DBG_LOG_STATEMENT("nos", nos[i], mmu_dbg, DBG_LEVEL_3);
+		DBG_LOG_STATEMENT("ir", ir[i], mmu_dbg, DBG_LEVEL_3);
+		DBG_LOG_STATEMENT("or", or[i], mmu_dbg, DBG_LEVEL_3);
+
 		// check to see if the regions are normal memory and not outer sharable
 		// check to see if the inner and outer regions are writeback, no write allocate
 		if((tr[i] == GEN_PRRR_NM) && (nos[i] == TRUE) && (ir[i] == GEN_NMRR_WB_NO_WA) && (or[i] == GEN_NMRR_WB_NO_WA)) {
-
-			DBG_LOG_STATEMENT("i", i, mmu_dbg, DBG_LEVEL_3);
-			DBG_LOG_STATEMENT("tr", tr[i], mmu_dbg, DBG_LEVEL_3);
-			DBG_LOG_STATEMENT("nos", nos[i], mmu_dbg, DBG_LEVEL_3);
-			DBG_LOG_STATEMENT("ir", ir[i], mmu_dbg, DBG_LEVEL_3);
-			DBG_LOG_STATEMENT("or", or[i], mmu_dbg, DBG_LEVEL_3);
 
 			*tex = (i & 0x4) ? TRUE : FALSE;
 			*c = (i & 0x2) ? TRUE : FALSE;
@@ -1506,8 +1506,14 @@ result_t mmu_set_section_attributes(tt_first_level_descriptor_t *fld, size_t opt
 	DBG_LOG_FUNCTION(mmu_dbg, DBG_LEVEL_3);
 
 	sctlr = gen_get_sctlr();
+	prrr = gen_get_prrr();
+	nmrr = gen_get_nmrr();
 
-	if(sctlr.fields.tre == TRUE) {
+	// the check for prrr and nmrr not equal to 0 is to ensure that
+	// the registers actually hold ligitimage values
+	// some SoCs, emulated ones (i.e. QEMU) decide to support
+	// the tre bit in the sctlr but implement the prrr and nmrr ans RAZ/WI
+	if(sctlr.fields.tre == TRUE && prrr.all != 0 && nmrr.all != 0) {
 
 		// Only care about 3 types of memory, any region that can
 		// be sharable will be sharable
@@ -1516,7 +1522,7 @@ result_t mmu_set_section_attributes(tt_first_level_descriptor_t *fld, size_t opt
 		// Only bufferable (completely)
 		// Neither cacheable/bufferable
 
-		prrr = gen_get_prrr();
+		DBG_LOG_STATEMENT("prrr", prrr.all, mmu_dbg, DBG_LEVEL_3);
 
 		tr[0] = prrr.fields.tr0; nos[0] = prrr.fields.nos0;
 		tr[1] = prrr.fields.tr1; nos[1] = prrr.fields.nos1;
@@ -1527,7 +1533,7 @@ result_t mmu_set_section_attributes(tt_first_level_descriptor_t *fld, size_t opt
 		tr[6] = prrr.fields.tr6; nos[6] = prrr.fields.nos6;
 		tr[7] = prrr.fields.tr7; nos[7] = prrr.fields.nos7;
 
-		nmrr = gen_get_nmrr();
+		DBG_LOG_STATEMENT("nmrr", nmrr.all, mmu_dbg, DBG_LEVEL_3);
 
 		ir[0] = nmrr.fields.ir0; or[0] = nmrr.fields.or0;
 		ir[1] = nmrr.fields.ir1; or[1] = nmrr.fields.or1;
@@ -1607,8 +1613,14 @@ result_t mmu_set_small_page_attributes(tt_second_level_descriptor_t *sld, size_t
 	DBG_LOG_FUNCTION(mmu_dbg, DBG_LEVEL_3);
 
 	sctlr = gen_get_sctlr();
+	prrr = gen_get_prrr();
+	nmrr = gen_get_nmrr();
 
-	if(sctlr.fields.tre == TRUE) {
+	// the check for prrr and nmrr not equal to 0 is to ensure that
+	// the registers actually hold ligitimage values
+	// some SoCs, emulated ones (i.e. QEMU) decide to support
+	// the tre bit in the sctlr but implement the prrr and nmrr ans RAZ/WI
+	if(sctlr.fields.tre == TRUE && prrr.all != 0 && nmrr.all != 0) {
 
 		// Only care about 3 types of memory, any region that can
 		// be sharable will be sharable
@@ -1617,7 +1629,7 @@ result_t mmu_set_small_page_attributes(tt_second_level_descriptor_t *sld, size_t
 		// Only bufferable (completely)
 		// Neither cacheable/bufferable
 
-		prrr = gen_get_prrr();
+		DBG_LOG_STATEMENT("prrr", prrr.all, mmu_dbg, DBG_LEVEL_3);
 
 		tr[0] = prrr.fields.tr0; nos[0] = prrr.fields.nos0;
 		tr[1] = prrr.fields.tr1; nos[1] = prrr.fields.nos1;
@@ -1628,7 +1640,7 @@ result_t mmu_set_small_page_attributes(tt_second_level_descriptor_t *sld, size_t
 		tr[6] = prrr.fields.tr6; nos[6] = prrr.fields.nos6;
 		tr[7] = prrr.fields.tr7; nos[7] = prrr.fields.nos7;
 
-		nmrr = gen_get_nmrr();
+		DBG_LOG_STATEMENT("nmrr", nmrr.all, mmu_dbg, DBG_LEVEL_3);
 
 		ir[0] = nmrr.fields.ir0; or[0] = nmrr.fields.or0;
 		ir[1] = nmrr.fields.ir1; or[1] = nmrr.fields.or1;
@@ -1645,7 +1657,7 @@ result_t mmu_set_small_page_attributes(tt_second_level_descriptor_t *sld, size_t
 			CHECK_END
 		}
 		else if(options & MMU_MAP_DEVICE_MEMORY) {
-			CHECK_SUCCESS(mmu_get_device_attributes(prrr, tr, nos, ir, or, &tex, &c, &b, &s), "unable to get normal memory attributes", FAILURE, mmu_dbg, DBG_LEVEL_3)
+			CHECK_SUCCESS(mmu_get_device_attributes(prrr, tr, nos, ir, or, &tex, &c, &b, &s), "unable to get device attributes", FAILURE, mmu_dbg, DBG_LEVEL_3)
 				return FAILURE;
 			CHECK_END
 		}
